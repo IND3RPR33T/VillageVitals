@@ -1,0 +1,17 @@
+# Create .env.local file in the root directory with these values:
+
+DATABASE_URL=postgresql://neondb_owner:npg_Ri6b5gwhyuTq@ep-wandering-voice-ad4rlqxy-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require
+
+JWT_SECRET=your-super-secret-jwt-key-here-change-this-in-production
+
+EMAIL_HOST=smtp.gmail.com
+EMAIL_PORT=587
+EMAIL_USER=your-email@gmail.com
+EMAIL_PASS=ilwv fgbp airl mqyp
+
+NEXT_PUBLIC_APP_URL=http://localhost:8080
+
+# After creating .env.local:
+# 1. Start the server: npm run dev
+# 2. Initialize database: visit http://localhost:8080/api/init-db
+# 3. Test signup/login at: http://localhost:8080/login
