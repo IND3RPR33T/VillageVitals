@@ -18,6 +18,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { format } from "date-fns"
 import { CalendarIcon, Upload, X, Plus, Activity, AlertTriangle, CheckCircle } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { addHealthReport } from "@/lib/firestore-service"
 
 const commonSymptoms = [
   "Fever",
@@ -43,6 +44,15 @@ export default function HealthReportPage() {
   const [uploadedImages, setUploadedImages] = useState<File[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isSubmitted, setIsSubmitted] = useState(false)
+  const [submitError, setSubmitError] = useState<string | null>(null)
+  const [reportId, setReportId] = useState<string | null>(null)
+
+  // Form data state
+  const [villageName, setVillageName] = useState("")
+  const [selectedState, setSelectedState] = useState("")
+  const [numberOfCases, setNumberOfCases] = useState("")
+  const [description, setDescription] = useState("")
+  const [contactInfo, setContactInfo] = useState("")
 
   const handleSymptomToggle = (symptom: string) => {
     setSelectedSymptoms((prev) => (prev.includes(symptom) ? prev.filter((s) => s !== symptom) : [...prev, symptom]))
@@ -68,15 +78,44 @@ export default function HealthReportPage() {
     setUploadedImages((prev) => prev.filter((_, i) => i !== index))
   }
 
+  // Determine severity based on symptoms count and type
+  const getSeverity = (): 'low' | 'medium' | 'high' | 'critical' => {
+    const criticalSymptoms = ['Difficulty Breathing', 'Skin Rash']
+    const hasCritical = selectedSymptoms.some(s => criticalSymptoms.includes(s))
+    const cases = parseInt(numberOfCases) || 1
+
+    if (hasCritical || cases > 20) return 'critical'
+    if (selectedSymptoms.length > 5 || cases > 10) return 'high'
+    if (selectedSymptoms.length > 2 || cases > 5) return 'medium'
+    return 'low'
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsSubmitting(true)
+    setSubmitError(null)
 
-    // Simulate form submission
-    await new Promise((resolve) => setTimeout(resolve, 2000))
+    try {
+      // Save to Firebase Firestore
+      const id = await addHealthReport({
+        villageName,
+        state: selectedState,
+        symptoms: selectedSymptoms,
+        severity: getSeverity(),
+        numberOfCases: parseInt(numberOfCases) || 1,
+        description,
+        contactInfo,
+        incidentDate: date,
+      })
 
-    setIsSubmitting(false)
-    setIsSubmitted(true)
+      setReportId(id)
+      setIsSubmitting(false)
+      setIsSubmitted(true)
+    } catch (error: any) {
+      console.error('Submit error:', error)
+      setSubmitError(error.message || 'Failed to submit report. Please try again.')
+      setIsSubmitting(false)
+    }
   }
 
   if (isSubmitted) {
@@ -131,6 +170,11 @@ export default function HealthReportPage() {
                 <CardDescription>Provide basic details about the health incident</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
+                {submitError && (
+                  <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg">
+                    {submitError}
+                  </div>
+                )}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
                     <Label htmlFor="date">Date of Incident</Label>
@@ -152,19 +196,33 @@ export default function HealthReportPage() {
 
                   <div className="space-y-2">
                     <Label htmlFor="cases">Number of Cases</Label>
-                    <Input id="cases" type="number" min="1" placeholder="Enter number of affected people" required />
+                    <Input
+                      id="cases"
+                      type="number"
+                      min="1"
+                      placeholder="Enter number of affected people"
+                      value={numberOfCases}
+                      onChange={(e) => setNumberOfCases(e.target.value)}
+                      required
+                    />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
                     <Label htmlFor="village">Village/Area</Label>
-                    <Input id="village" placeholder="Enter village or area name" required />
+                    <Input
+                      id="village"
+                      placeholder="Enter village or area name"
+                      value={villageName}
+                      onChange={(e) => setVillageName(e.target.value)}
+                      required
+                    />
                   </div>
 
                   <div className="space-y-2">
                     <Label htmlFor="state">State</Label>
-                    <Select required>
+                    <Select value={selectedState} onValueChange={setSelectedState} required>
                       <SelectTrigger>
                         <SelectValue placeholder="Select state" />
                       </SelectTrigger>
@@ -262,12 +320,19 @@ export default function HealthReportPage() {
                     id="description"
                     placeholder="Describe the situation, timeline, potential causes, or any other relevant information..."
                     rows={4}
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
                   />
                 </div>
 
                 <div className="space-y-2">
                   <Label htmlFor="contact">Contact Information (Optional)</Label>
-                  <Input id="contact" placeholder="Phone number or email for follow-up" />
+                  <Input
+                    id="contact"
+                    placeholder="Phone number or email for follow-up"
+                    value={contactInfo}
+                    onChange={(e) => setContactInfo(e.target.value)}
+                  />
                 </div>
 
                 {/* Image Upload */}

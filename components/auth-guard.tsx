@@ -4,17 +4,8 @@ import type React from "react"
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-
-interface User {
-  id: number;
-  firstName: string;
-  lastName: string;
-  email: string;
-  phone: string;
-  role: string;
-  isVerified: boolean;
-  createdAt: string;
-}
+import { User } from "firebase/auth"
+import { onAuthChange, getCurrentUserProfile, type UserProfile } from "@/lib/firebase-auth"
 
 interface AuthGuardProps {
   children: React.ReactNode
@@ -23,48 +14,57 @@ interface AuthGuardProps {
 
 export function AuthGuard({ children, allowedRoles }: AuthGuardProps) {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
-  const [user, setUser] = useState<User | null>(null)
+  const [user, setUser] = useState<UserProfile | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const router = useRouter()
 
   useEffect(() => {
-    checkAuth()
-  }, [router])
-
-  const checkAuth = async () => {
-    try {
-      const response = await fetch("/api/auth/me", {
-        method: "GET",
-        credentials: "include",
-      })
-
-      if (response.status === 401) {
+    const unsubscribe = onAuthChange(async (firebaseUser: User | null) => {
+      if (!firebaseUser) {
+        setIsAuthenticated(false)
+        setUser(null)
+        setIsLoading(false)
         router.push("/login")
         return
       }
 
-      const data = await response.json()
+      try {
+        // Get user profile from Firestore
+        const profile = await getCurrentUserProfile()
 
-      if (response.ok) {
-        setUser(data.user)
-        
-        // Check if user role is allowed
-        if (allowedRoles && !allowedRoles.includes(data.user.role)) {
-          router.push("/unauthorized")
-          return
+        if (profile) {
+          // Check if user role is allowed
+          if (allowedRoles && !allowedRoles.includes(profile.role)) {
+            router.push("/unauthorized")
+            return
+          }
+
+          setUser(profile)
+          setIsAuthenticated(true)
+        } else {
+          // Create minimal profile from Firebase user
+          setUser({
+            uid: firebaseUser.uid,
+            email: firebaseUser.email || '',
+            firstName: firebaseUser.displayName?.split(' ')[0] || '',
+            lastName: firebaseUser.displayName?.split(' ').slice(1).join(' ') || '',
+            role: 'community',
+            isVerified: true,
+            createdAt: null,
+            updatedAt: null,
+          })
+          setIsAuthenticated(true)
         }
-        
-        setIsAuthenticated(true)
-      } else {
+      } catch (error) {
+        console.error("Auth check failed:", error)
         router.push("/login")
+      } finally {
+        setIsLoading(false)
       }
-    } catch (error) {
-      console.error("Auth check failed:", error)
-      router.push("/login")
-    } finally {
-      setIsLoading(false)
-    }
-  }
+    })
+
+    return () => unsubscribe()
+  }, [router, allowedRoles])
 
   if (isLoading) {
     return (
@@ -83,4 +83,26 @@ export function AuthGuard({ children, allowedRoles }: AuthGuardProps) {
   }
 
   return <>{children}</>
+}
+
+// Export user context hook for use in components
+export function useAuth() {
+  const [user, setUser] = useState<UserProfile | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const unsubscribe = onAuthChange(async (firebaseUser) => {
+      if (firebaseUser) {
+        const profile = await getCurrentUserProfile()
+        setUser(profile)
+      } else {
+        setUser(null)
+      }
+      setLoading(false)
+    })
+
+    return () => unsubscribe()
+  }, [])
+
+  return { user, loading }
 }

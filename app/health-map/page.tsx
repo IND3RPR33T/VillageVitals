@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { AuthGuard } from "@/components/auth-guard"
 import { DashboardLayout } from "@/components/dashboard-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -8,90 +8,22 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
-import { MapPin, Activity, Droplets, Hospital, Users, Phone, Navigation, Filter } from "lucide-react"
+import { MapPin, Activity, Droplets, Hospital, Users, Phone, Navigation, Filter, Loader2 } from "lucide-react"
+import { getHealthReports, getWaterQualityTests, getSymptomReports, type HealthReport, type WaterQualityTest } from "@/lib/firestore-service"
 
-// Mock data for map locations
-const healthIncidents = [
-  {
-    id: 1,
-    type: "health",
-    village: "Kamakhya Village",
-    coordinates: { lat: 26.1445, lng: 91.7362 },
-    cases: 5,
-    symptoms: ["Fever", "Headache"],
-    severity: "moderate",
-    date: "2024-01-15",
-    population: 1200,
-  },
-  {
-    id: 2,
-    type: "health",
-    village: "Majuli Village",
-    coordinates: { lat: 26.951, lng: 94.2224 },
-    cases: 2,
-    symptoms: ["Stomach Pain"],
-    severity: "low",
-    date: "2024-01-14",
-    population: 800,
-  },
-  {
-    id: 3,
-    type: "health",
-    village: "Dibrugarh Village",
-    coordinates: { lat: 27.4728, lng: 94.912 },
-    cases: 8,
-    symptoms: ["Fever", "Cough", "Difficulty Breathing"],
-    severity: "high",
-    date: "2024-01-13",
-    population: 2100,
-  },
-]
-
-const waterSources = [
-  {
-    id: 4,
-    type: "water",
-    village: "Brahmaputra Village",
-    coordinates: { lat: 26.2006, lng: 92.9376 },
-    sourceType: "Well",
-    turbidity: 8.5,
-    risk: "low",
-    date: "2024-01-15",
-  },
-  {
-    id: 5,
-    type: "water",
-    village: "Tezpur Village",
-    coordinates: { lat: 26.6335, lng: 92.7983 },
-    sourceType: "River",
-    turbidity: 15.2,
-    risk: "moderate",
-    date: "2024-01-14",
-  },
-  {
-    id: 6,
-    type: "water",
-    village: "Silchar Village",
-    coordinates: { lat: 24.8333, lng: 92.7789 },
-    sourceType: "Pond",
-    turbidity: 25.8,
-    risk: "high",
-    date: "2024-01-12",
-  },
-]
-
+// Static health centers (these don't change often)
 const healthCenters = [
   {
-    id: 7,
-    type: "hospital",
+    id: "hc1",
+    type: "hospital" as const,
     name: "Guwahati Medical College",
     coordinates: { lat: 26.1445, lng: 91.7898 },
     contact: "+91 361 2528008",
     services: ["Emergency", "General Medicine", "Pediatrics"],
   },
   {
-    id: 8,
-    type: "hospital",
+    id: "hc2",
+    type: "hospital" as const,
     name: "Jorhat Medical College",
     coordinates: { lat: 26.7509, lng: 94.2037 },
     contact: "+91 376 2370012",
@@ -99,21 +31,107 @@ const healthCenters = [
   },
 ]
 
-const allLocations = [...healthIncidents, ...waterSources, ...healthCenters]
-
 export default function HealthMapPage() {
   const [selectedLocation, setSelectedLocation] = useState<any>(null)
   const [showHealthIncidents, setShowHealthIncidents] = useState(true)
   const [showWaterSources, setShowWaterSources] = useState(true)
   const [showHealthCenters, setShowHealthCenters] = useState(true)
   const [severityFilter, setSeverityFilter] = useState("all")
+  const [loading, setLoading] = useState(true)
+
+  // Real data from Firestore
+  const [healthIncidents, setHealthIncidents] = useState<any[]>([])
+  const [waterSources, setWaterSources] = useState<any[]>([])
+
+  useEffect(() => {
+    loadMapData()
+  }, [])
+
+  const loadMapData = async () => {
+    try {
+      const [healthReports, waterTests, symptomReports] = await Promise.all([
+        getHealthReports(50),
+        getWaterQualityTests(50),
+        getSymptomReports(50),
+      ])
+
+      // Transform health reports to map markers
+      const healthMarkers = [
+        ...healthReports.map((r, i) => ({
+          id: r.id || `hr-${i}`,
+          type: "health" as const,
+          village: r.villageName || 'Unknown Village',
+          coordinates: {
+            lat: 26.1 + (Math.random() * 2),
+            lng: 91.5 + (Math.random() * 3)
+          },
+          cases: r.numberOfCases || 1,
+          symptoms: r.symptoms || [],
+          severity: r.severity || 'low',
+          date: formatDate(r.createdAt),
+          population: 1000 + Math.floor(Math.random() * 2000),
+        })),
+        ...symptomReports.map((r, i) => ({
+          id: r.id || `sr-${i}`,
+          type: "health" as const,
+          village: r.location?.address || r.patientInfo?.name || 'Symptom Report',
+          coordinates: {
+            lat: r.location?.latitude || 26.2 + (Math.random() * 2),
+            lng: r.location?.longitude || 92 + (Math.random() * 3)
+          },
+          cases: 1,
+          symptoms: r.symptoms?.map((s: any) => s.name || s) || [],
+          severity: r.isEmergency ? 'high' : 'moderate',
+          date: formatDate(r.createdAt),
+          population: 800,
+          source: 'Flutter App',
+        })),
+      ]
+
+      // Transform water quality tests to map markers
+      const waterMarkers = waterTests.map((t, i) => ({
+        id: t.id || `wt-${i}`,
+        type: "water" as const,
+        village: t.location || 'Unknown Location',
+        coordinates: {
+          lat: 26 + (Math.random() * 2.5),
+          lng: 92 + (Math.random() * 3)
+        },
+        sourceType: t.sourceType || 'Unknown',
+        turbidity: t.measurements?.turbidity || 0,
+        risk: t.riskAssessment?.level || 'low',
+        date: formatDate(t.createdAt),
+      }))
+
+      setHealthIncidents(healthMarkers)
+      setWaterSources(waterMarkers)
+    } catch (error) {
+      console.error('Error loading map data:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const formatDate = (timestamp: any) => {
+    if (!timestamp) return 'N/A'
+    try {
+      const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp)
+      return date.toLocaleDateString()
+    } catch {
+      return 'N/A'
+    }
+  }
+
+  const allLocations = [...healthIncidents, ...waterSources, ...healthCenters]
 
   const getMarkerColor = (item: any) => {
     if (item.type === "health") {
       switch (item.severity) {
         case "high":
+        case "critical":
           return "bg-red-500"
         case "moderate":
+        case "medium":
           return "bg-yellow-500"
         case "low":
           return "bg-green-500"
@@ -162,6 +180,18 @@ export default function HealthMapPage() {
     return true
   })
 
+  if (loading) {
+    return (
+      <AuthGuard>
+        <DashboardLayout>
+          <div className="flex items-center justify-center min-h-[60vh]">
+            <Loader2 className="h-8 w-8 animate-spin" />
+          </div>
+        </DashboardLayout>
+      </AuthGuard>
+    )
+  }
+
   return (
     <AuthGuard>
       <DashboardLayout>
@@ -193,29 +223,29 @@ export default function HealthMapPage() {
                       <Checkbox
                         id="health-incidents"
                         checked={showHealthIncidents}
-                        onCheckedChange={setShowHealthIncidents}
+                        onCheckedChange={(checked) => setShowHealthIncidents(checked as boolean)}
                       />
                       <label htmlFor="health-incidents" className="text-sm flex items-center gap-2">
                         <Activity className="h-4 w-4 text-red-500" />
-                        Health Incidents
+                        Health Incidents ({healthIncidents.length})
                       </label>
                     </div>
                     <div className="flex items-center space-x-2">
-                      <Checkbox id="water-sources" checked={showWaterSources} onCheckedChange={setShowWaterSources} />
+                      <Checkbox id="water-sources" checked={showWaterSources} onCheckedChange={(checked) => setShowWaterSources(checked as boolean)} />
                       <label htmlFor="water-sources" className="text-sm flex items-center gap-2">
                         <Droplets className="h-4 w-4 text-blue-500" />
-                        Water Sources
+                        Water Sources ({waterSources.length})
                       </label>
                     </div>
                     <div className="flex items-center space-x-2">
                       <Checkbox
                         id="health-centers"
                         checked={showHealthCenters}
-                        onCheckedChange={setShowHealthCenters}
+                        onCheckedChange={(checked) => setShowHealthCenters(checked as boolean)}
                       />
                       <label htmlFor="health-centers" className="text-sm flex items-center gap-2">
                         <Hospital className="h-4 w-4 text-green-500" />
-                        Health Centers
+                        Health Centers ({healthCenters.length})
                       </label>
                     </div>
                   </div>
@@ -266,7 +296,9 @@ export default function HealthMapPage() {
             <Card className="lg:col-span-3 animate-slide-up">
               <CardHeader>
                 <CardTitle>Health & Water Quality Map</CardTitle>
-                <CardDescription>Click on markers to view detailed information about each location</CardDescription>
+                <CardDescription>
+                  Showing {filteredLocations.length} locations from Firestore. Click on markers to view details.
+                </CardDescription>
               </CardHeader>
               <CardContent>
                 {/* Simulated Map Interface */}
@@ -286,24 +318,30 @@ export default function HealthMapPage() {
                   </div>
 
                   {/* Map Markers */}
-                  {filteredLocations.map((location, index) => {
-                    const Icon = getMarkerIcon(location)
-                    const colorClass = getMarkerColor(location)
+                  {filteredLocations.length === 0 ? (
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <p className="text-muted-foreground">No data to display. Submit reports to see them on the map.</p>
+                    </div>
+                  ) : (
+                    filteredLocations.map((location, index) => {
+                      const Icon = getMarkerIcon(location)
+                      const colorClass = getMarkerColor(location)
 
-                    return (
-                      <button
-                        key={location.id}
-                        className={`absolute w-8 h-8 ${colorClass} rounded-full flex items-center justify-center text-white shadow-lg hover:scale-110 transition-transform animate-pulse-health`}
-                        style={{
-                          left: `${20 + (index % 5) * 15}%`,
-                          top: `${20 + Math.floor(index / 5) * 20}%`,
-                        }}
-                        onClick={() => setSelectedLocation(location)}
-                      >
-                        <Icon className="h-4 w-4" />
-                      </button>
-                    )
-                  })}
+                      return (
+                        <button
+                          key={location.id}
+                          className={`absolute w-8 h-8 ${colorClass} rounded-full flex items-center justify-center text-white shadow-lg hover:scale-110 transition-transform`}
+                          style={{
+                            left: `${10 + (index % 8) * 10}%`,
+                            top: `${15 + Math.floor(index / 8) * 15}%`,
+                          }}
+                          onClick={() => setSelectedLocation(location)}
+                        >
+                          <Icon className="h-4 w-4" />
+                        </button>
+                      )
+                    })
+                  )}
 
                   {/* Map Controls */}
                   <div className="absolute top-4 right-4 flex flex-col gap-2">
@@ -335,6 +373,9 @@ export default function HealthMapPage() {
                   {selectedLocation.type === "water" && <Droplets className="h-5 w-5" />}
                   {selectedLocation.type === "hospital" && <Hospital className="h-5 w-5" />}
                   {selectedLocation.village || selectedLocation.name}
+                  {selectedLocation.source && (
+                    <Badge variant="outline" className="ml-2">{selectedLocation.source}</Badge>
+                  )}
                 </CardTitle>
                 <CardDescription>Detailed information about this location</CardDescription>
               </CardHeader>
@@ -356,7 +397,7 @@ export default function HealthMapPage() {
                         </p>
                         <Badge
                           variant={
-                            selectedLocation.severity === "high"
+                            selectedLocation.severity === "high" || selectedLocation.severity === "critical"
                               ? "destructive"
                               : selectedLocation.severity === "moderate"
                                 ? "default"
@@ -370,11 +411,15 @@ export default function HealthMapPage() {
                       <div className="space-y-2">
                         <h4 className="font-medium">Symptoms Reported</h4>
                         <div className="flex flex-wrap gap-1">
-                          {selectedLocation.symptoms.map((symptom: string) => (
-                            <Badge key={symptom} variant="outline" className="text-xs">
-                              {symptom}
-                            </Badge>
-                          ))}
+                          {selectedLocation.symptoms && selectedLocation.symptoms.length > 0 ? (
+                            selectedLocation.symptoms.map((symptom: string, idx: number) => (
+                              <Badge key={idx} variant="outline" className="text-xs">
+                                {symptom}
+                              </Badge>
+                            ))
+                          ) : (
+                            <span className="text-sm text-muted-foreground">No symptoms recorded</span>
+                          )}
                         </div>
                         <p className="text-xs text-muted-foreground">Reported on {selectedLocation.date}</p>
                       </div>
@@ -474,7 +519,7 @@ export default function HealthMapPage() {
               <CardContent>
                 <div className="text-2xl font-bold">{healthIncidents.length}</div>
                 <p className="text-xs text-muted-foreground">
-                  {healthIncidents.filter((h) => h.severity === "high").length} high priority
+                  {healthIncidents.filter((h) => h.severity === "high" || h.severity === "critical").length} high priority
                 </p>
               </CardContent>
             </Card>

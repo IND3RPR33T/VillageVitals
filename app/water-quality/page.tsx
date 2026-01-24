@@ -89,19 +89,19 @@ const predictWaterQualityRisk = async (parameters: {
       },
       body: JSON.stringify(parameters),
     })
-    
+
     if (!response.ok) {
       const errorData = await response.json()
       throw new Error(errorData.error || `HTTP error! status: ${response.status}`)
     }
-    
+
     const result = await response.json()
-    
+
     // Validate the response format
     if (result.status === 'error') {
       throw new Error(result.error || 'Model prediction failed')
     }
-    
+
     return result
   } catch (error) {
     console.error('Error calling local ML model:', error)
@@ -151,11 +151,11 @@ export default function WaterQualityPage() {
       }
 
       const prediction = await predictWaterQualityRisk(parameters)
-      
+
       // Assuming your model returns something like:
       // { risk_level: "high", probability: 0.85, confidence: 0.92 }
       // Adjust this based on your actual model output format
-      
+
       let riskLevel: string
       let percentage: number
       let color: string
@@ -180,11 +180,11 @@ export default function WaterQualityPage() {
         color: color,
         confidence: prediction.confidence ? Math.round(prediction.confidence * 100) : undefined
       })
-      
+
     } catch (error) {
       console.error('Prediction error:', error)
       setPredictionError('Failed to get risk prediction. Using fallback assessment.')
-      
+
       // Fallback to original logic if API fails
       const fallbackRisk = getFallbackRiskLevel({
         coliform: Number(coliform),
@@ -248,34 +248,38 @@ export default function WaterQualityPage() {
     }
     setIsSubmitting(true)
 
-    // Here you can also send the risk prediction along with the form data
-    const submissionData = {
-      date: date?.toISOString(),
-      location: (document.getElementById('location') as HTMLInputElement)?.value,
-      sourceType,
-      gpsCoordinates,
-      measurements: {
-        coliform: Number(coliform),
-        turbidity: Number(turbidity),
-        bod: Number(bod),
-        cod: Number(cod),
-        nitrate: Number(nitrate),
-        ammonia: Number(ammonia),
-      },
-      riskAssessment: currentRisk,
-      notes: (document.getElementById('notes') as HTMLTextAreaElement)?.value,
-    }
-
-    // Submit to your backend
     try {
-      // await submitWaterQualityTest(submissionData)
-      await new Promise((resolve) => setTimeout(resolve, 2000)) // Mock delay
+      // Import and use Firebase service
+      const { addWaterQualityTest } = await import('@/lib/firestore-service')
+
+      const location = (document.getElementById('location') as HTMLInputElement)?.value || ''
+      const notes = (document.getElementById('notes') as HTMLTextAreaElement)?.value || ''
+
+      // Save to Firebase Firestore
+      const testId = await addWaterQualityTest({
+        location,
+        sourceType,
+        gpsCoordinates,
+        measurements: {
+          coliform: Number(coliform),
+          turbidity: Number(turbidity),
+          bod: Number(bod),
+          cod: Number(cod),
+          nitrate: Number(nitrate),
+          ammonia: Number(ammonia),
+        },
+        riskAssessment: currentRisk || { level: 'low', percentage: 0 },
+        notes,
+        testDate: date,
+      })
+
+      console.log('Water quality test saved:', testId)
       setIsSubmitting(false)
       setIsSubmitted(true)
-    } catch (error) {
+    } catch (error: any) {
       console.error('Submission error:', error)
       setIsSubmitting(false)
-      window.alert("Failed to submit test results. Please try again.")
+      window.alert(`Failed to submit test results: ${error.message || 'Please try again.'}`)
     }
   }
 
@@ -525,13 +529,13 @@ export default function WaterQualityPage() {
                             </Badge>
                           )}
                         </div>
-                        
+
                         {predictionError && (
                           <div className="mb-3 text-sm text-yellow-600 bg-yellow-50 p-2 rounded">
                             ⚠️ {predictionError}
                           </div>
                         )}
-                        
+
                         {currentRisk && (
                           <div className="space-y-2">
                             <div className="flex justify-between text-sm">
@@ -540,13 +544,12 @@ export default function WaterQualityPage() {
                             </div>
                             <Progress
                               value={currentRisk.percentage}
-                              className={`h-2 ${
-                                currentRisk.color === "green"
+                              className={`h-2 ${currentRisk.color === "green"
                                   ? "[&>div]:bg-green-500"
                                   : currentRisk.color === "yellow"
                                     ? "[&>div]:bg-yellow-500"
                                     : "[&>div]:bg-red-500"
-                              }`}
+                                }`}
                             />
                             {currentRisk.confidence && (
                               <div className="text-xs text-muted-foreground">
@@ -555,7 +558,7 @@ export default function WaterQualityPage() {
                             )}
                           </div>
                         )}
-                        
+
                         {isLoadingPrediction && !currentRisk && (
                           <div className="text-sm text-muted-foreground flex items-center gap-2">
                             <Loader2 className="h-4 w-4 animate-spin" />
