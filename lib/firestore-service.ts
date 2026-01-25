@@ -37,6 +37,9 @@ export interface HealthReport {
     description?: string;
     contactInfo?: string;
     images?: string[];
+    attachments?: string[]; // Alternative field name used by Flutter app
+    additionalInfo?: string;
+    voiceNote?: string;
     location?: {
         latitude?: number;
         longitude?: number;
@@ -669,18 +672,21 @@ export async function addAwarenessContent(data: {
 // Get awareness content
 export async function getAwarenessContent(limitCount = 50): Promise<AwarenessContent[]> {
     try {
+        // Simple query without composite index requirement
         const q = query(
             collection(db, 'awareness_content'),
-            where('isActive', '==', true),
             orderBy('createdAt', 'desc'),
             limit(limitCount)
         );
 
         const snapshot = await getDocs(q);
-        return snapshot.docs.map(doc => ({
+        const allContent = snapshot.docs.map(doc => ({
             id: doc.id,
             ...doc.data()
         })) as AwarenessContent[];
+        
+        // Filter active content client-side to avoid index requirements
+        return allContent.filter(item => item.isActive !== false);
     } catch (error) {
         console.error('Error fetching awareness content:', error);
         return [];

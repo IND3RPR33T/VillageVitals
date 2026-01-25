@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef } from "react"
 import { RBACAuthGuard } from "@/components/rbac-auth-guard"
 import { DashboardLayout } from "@/components/dashboard-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -14,7 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import {
   Users, Activity, Droplets, AlertTriangle, FileText, Download, Plus, Trash2,
-  Eye, Loader2, CheckCircle, AlertCircle, BookOpen, Shield
+  Eye, Loader2, CheckCircle, AlertCircle, BookOpen, Shield, Upload, X
 } from "lucide-react"
 import {
   Table,
@@ -49,6 +49,7 @@ import {
   type Alert as AlertType,
   type AwarenessContent,
 } from "@/lib/firestore-service"
+import { uploadImage, validateImageFile, compressImage } from "@/lib/cloudinary-service"
 
 export default function AdminPage() {
   const [loading, setLoading] = useState(true)
@@ -75,6 +76,12 @@ export default function AdminPage() {
     imageUrl: "",
     isFeatured: false,
   })
+  
+  // Image upload states
+  const [imageFile, setImageFile] = useState<File | null>(null)
+  const [imagePreview, setImagePreview] = useState<string>("")
+  const [imageUploading, setImageUploading] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     loadAllData()
@@ -152,6 +159,35 @@ export default function AdminPage() {
     }
   }
 
+  // Image upload handlers
+  const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    const validation = validateImageFile(file)
+    if (!validation.valid) {
+      setError(validation.error || "Invalid image file")
+      return
+    }
+
+    setImageFile(file)
+    
+    // Create preview
+    const reader = new FileReader()
+    reader.onload = () => {
+      setImagePreview(reader.result as string)
+    }
+    reader.readAsDataURL(file)
+  }
+
+  const clearImageSelection = () => {
+    setImageFile(null)
+    setImagePreview("")
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ""
+    }
+  }
+
   const handleAddAwareness = async () => {
     if (!awarenessForm.title || !awarenessForm.description || !awarenessForm.content) {
       setError("Please fill in all required fields")
@@ -160,7 +196,27 @@ export default function AdminPage() {
 
     setIsSaving(true)
     try {
-      await addAwarenessContent(awarenessForm)
+      // Upload image if selected
+      let imageUrl = awarenessForm.imageUrl
+      if (imageFile) {
+        setImageUploading(true)
+        try {
+          const compressedFile = await compressImage(imageFile, 800, 0.8)
+          const result = await uploadImage(compressedFile, {
+            folder: 'awareness_content',
+            quality: 'auto',
+            format: 'auto',
+          })
+          imageUrl = result.secure_url
+        } catch (err) {
+          console.error("Image upload failed:", err)
+          setError("Failed to upload image, but content will be saved without image")
+        } finally {
+          setImageUploading(false)
+        }
+      }
+
+      await addAwarenessContent({ ...awarenessForm, imageUrl })
       setSuccess("Awareness content added successfully! It will now appear in the app.")
       setIsAddAwarenessOpen(false)
       setAwarenessForm({
@@ -171,6 +227,7 @@ export default function AdminPage() {
         imageUrl: "",
         isFeatured: false,
       })
+      clearImageSelection()
       loadAllData()
     } catch (error) {
       setError("Failed to add awareness content")
@@ -734,13 +791,64 @@ export default function AdminPage() {
                           />
                         </div>
                         <div className="space-y-2">
-                          <Label htmlFor="imageUrl">Image URL (optional)</Label>
-                          <Input
-                            id="imageUrl"
-                            value={awarenessForm.imageUrl}
-                            onChange={(e) => setAwarenessForm({ ...awarenessForm, imageUrl: e.target.value })}
-                            placeholder="https://example.com/image.jpg"
-                          />
+                          <Label>Image (optional)</Label>
+                          <div className="flex flex-col gap-2">
+                            <input
+                              ref={fileInputRef}
+                              type="file"
+                              accept="image/*"
+                              onChange={handleImageSelect}
+                              className="hidden"
+                              id="awareness-image-upload"
+                            />
+                            
+                            {imagePreview ? (
+                              <div className="relative w-48">
+                                <img 
+                                  src={imagePreview} 
+                                  alt="Preview" 
+                                  className="w-full h-32 object-cover rounded border"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={clearImageSelection}
+                                  className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+                                >
+                                  <X className="h-3 w-3" />
+                                </button>
+                              </div>
+                            ) : (
+                              <label 
+                                htmlFor="awareness-image-upload"
+                                className="flex items-center gap-2 px-4 py-2 border-2 border-dashed rounded cursor-pointer hover:border-primary hover:bg-gray-50 w-fit"
+                              >
+                                <Upload className="h-4 w-4" />
+                                Choose Image
+                              </label>
+                            )}
+                            
+                            {imageUploading && (
+                              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                                Uploading image...
+                              </div>
+                            )}
+                            
+                            <p className="text-xs text-muted-foreground">
+                              Supported: JPG, PNG, WebP (max 10MB)
+                            </p>
+                            
+                            {/* Fallback URL input */}
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                              <span>Or enter URL:</span>
+                              <Input
+                                value={awarenessForm.imageUrl}
+                                onChange={(e) => setAwarenessForm({ ...awarenessForm, imageUrl: e.target.value })}
+                                placeholder="https://example.com/image.jpg"
+                                className="h-8 text-xs"
+                              />
+                            </div>
+                          </div>
                         </div>
                         <div className="flex items-center gap-2">
                           <input

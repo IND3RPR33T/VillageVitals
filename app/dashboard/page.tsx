@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import { RBACAuthGuard } from "@/components/rbac-auth-guard"
 import { DashboardLayout } from "@/components/dashboard-layout"
+import { RoleRestricted, AdminOnly, HealthOfficialOnly, FieldWorkerPlus } from "@/components/role-restricted"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -193,39 +194,41 @@ export default function DashboardPage() {
           </div>
 
           {/* Admin Data Initialization - Only show if no data */}
-          {isAdmin && (totalReports === 0 && totalWaterTests === 0) && (
-            <Card className="animate-slide-up border-yellow-200 bg-yellow-50">
-              <CardHeader>
-                <CardTitle className="text-sm font-medium flex items-center gap-2">
-                  <AlertTriangle className="h-4 w-4 text-yellow-600" />
-                  No Data Found
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-yellow-700 mb-4">
-                  It looks like there&apos;s no data in the system. Would you like to initialize with sample data?
-                </p>
-                <Button 
-                  onClick={async () => {
-                    try {
-                      const response = await fetch('/api/init-db', { method: 'POST' })
-                      const result = await response.json()
-                      if (result.success) {
-                        console.log('✅ Data initialized!')
-                        await loadData() // Reload dashboard data
+          <AdminOnly showBlurred={false}>
+            {(totalReports === 0 && totalWaterTests === 0) && (
+              <Card className="animate-slide-up border-yellow-200 bg-yellow-50">
+                <CardHeader>
+                  <CardTitle className="text-sm font-medium flex items-center gap-2">
+                    <AlertTriangle className="h-4 w-4 text-yellow-600" />
+                    No Data Found
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-yellow-700 mb-4">
+                    It looks like there&apos;s no data in the system. Would you like to initialize with sample data?
+                  </p>
+                  <Button 
+                    onClick={async () => {
+                      try {
+                        const response = await fetch('/api/init-db', { method: 'POST' })
+                        const result = await response.json()
+                        if (result.success) {
+                          console.log('✅ Data initialized!')
+                          await loadData() // Reload dashboard data
+                        }
+                      } catch (error) {
+                        console.error('❌ Failed to initialize data:', error)
                       }
-                    } catch (error) {
-                      console.error('❌ Failed to initialize data:', error)
-                    }
-                  }}
-                  size="sm"
-                  className="bg-yellow-600 hover:bg-yellow-700"
-                >
-                  Initialize Sample Data
-                </Button>
-              </CardContent>
-            </Card>
-          )}
+                    }}
+                    size="sm"
+                    className="bg-yellow-600 hover:bg-yellow-700"
+                  >
+                    Initialize Sample Data
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
+          </AdminOnly>
 
           {/* Overview Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -290,24 +293,35 @@ export default function DashboardPage() {
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <Button asChild className="h-auto p-4 flex flex-col gap-2">
-                  <Link href="/health-report">
-                    <Plus className="h-6 w-6" />
-                    <span className="text-sm">Submit Report</span>
-                  </Link>
-                </Button>
-                <Button asChild variant="outline" className="h-auto p-4 flex flex-col gap-2 bg-transparent">
-                  <Link href="/water-quality">
-                    <Droplets className="h-6 w-6" />
-                    <span className="text-sm">Water Quality</span>
-                  </Link>
-                </Button>
+                {/* Health Report - Field Workers and above */}
+                <FieldWorkerPlus>
+                  <Button asChild className="h-auto p-4 flex flex-col gap-2">
+                    <Link href="/health-report">
+                      <Plus className="h-6 w-6" />
+                      <span className="text-sm">Submit Report</span>
+                    </Link>
+                  </Button>
+                </FieldWorkerPlus>
+                
+                {/* Water Quality - Field Workers and above */}
+                <FieldWorkerPlus>
+                  <Button asChild variant="outline" className="h-auto p-4 flex flex-col gap-2 bg-transparent">
+                    <Link href="/water-quality">
+                      <Droplets className="h-6 w-6" />
+                      <span className="text-sm">Water Quality</span>
+                    </Link>
+                  </Button>
+                </FieldWorkerPlus>
+                
+                {/* Health Map - Available to all */}
                 <Button asChild variant="outline" className="h-auto p-4 flex flex-col gap-2 bg-transparent">
                   <Link href="/health-map">
                     <MapPin className="h-6 w-6" />
                     <span className="text-sm">Health Map</span>
                   </Link>
                 </Button>
+                
+                {/* Education - Available to all */}
                 <Button asChild variant="outline" className="h-auto p-4 flex flex-col gap-2 bg-transparent">
                   <Link href="/education">
                     <BookOpen className="h-6 w-6" />
@@ -320,85 +334,89 @@ export default function DashboardPage() {
 
           {/* Charts Section */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Health Trends Chart */}
-            <Card className="animate-slide-up">
-              <CardHeader>
-                <CardTitle>Health Trends</CardTitle>
-                <CardDescription>Monthly health cases and recovery rates</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {healthTrendsData.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={healthTrendsData}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="month" />
-                      <YAxis />
-                      <Tooltip />
-                      <Bar dataKey="cases" fill="hsl(var(--chart-1))" name="Cases" />
-                      <Bar dataKey="recovered" fill="hsl(var(--chart-2))" name="Recovered" />
-                    </BarChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="h-[300px] flex items-center justify-center text-muted-foreground">
-                    <div className="text-center">
-                      <Activity className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                      <p>No health trend data available</p>
-                      <p className="text-sm">Start submitting health reports to see trends</p>
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Water Quality Distribution */}
-            <Card className="animate-slide-up">
-              <CardHeader>
-                <CardTitle>Water Quality Distribution</CardTitle>
-                <CardDescription>Current status of water sources</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {waterQualityData.length > 0 ? (
-                  <>
+            {/* Health Trends Chart - Health Officials and above with detailed data */}
+            <HealthOfficialOnly>
+              <Card className="animate-slide-up">
+                <CardHeader>
+                  <CardTitle>Health Trends (Detailed)</CardTitle>
+                  <CardDescription>Monthly health cases and recovery rates - Full analytics</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {healthTrendsData.length > 0 ? (
                     <ResponsiveContainer width="100%" height={300}>
-                      <PieChart>
-                        <Pie
-                          data={waterQualityData}
-                          cx="50%"
-                          cy="50%"
-                          innerRadius={60}
-                          outerRadius={100}
-                          paddingAngle={5}
-                          dataKey="value"
-                        >
-                          {waterQualityData.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={entry.color} />
-                          ))}
-                        </Pie>
+                      <BarChart data={healthTrendsData}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="month" />
+                        <YAxis />
                         <Tooltip />
-                      </PieChart>
+                        <Bar dataKey="cases" fill="hsl(var(--chart-1))" name="Cases" />
+                        <Bar dataKey="recovered" fill="hsl(var(--chart-2))" name="Recovered" />
+                      </BarChart>
                     </ResponsiveContainer>
-                    <div className="flex justify-center gap-4 mt-4">
-                      {waterQualityData.map((item, index) => (
-                        <div key={index} className="flex items-center gap-2">
-                          <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }} />
-                          <span className="text-sm">
-                            {item.name}: {item.value}%
-                          </span>
-                        </div>
-                      ))}
+                  ) : (
+                    <div className="h-[300px] flex items-center justify-center text-muted-foreground">
+                      <div className="text-center">
+                        <Activity className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                        <p>No health trend data available</p>
+                        <p className="text-sm">Start submitting health reports to see trends</p>
+                      </div>
                     </div>
-                  </>
-                ) : (
-                  <div className="h-[300px] flex items-center justify-center text-muted-foreground">
-                    <div className="text-center">
-                      <Droplets className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                      <p>No water quality data available</p>
-                      <p className="text-sm">Conduct water quality tests to see distribution</p>
+                  )}
+                </CardContent>
+              </Card>
+            </HealthOfficialOnly>
+
+            {/* Water Quality Distribution - Field Workers and above */}
+            <FieldWorkerPlus>
+              <Card className="animate-slide-up">
+                <CardHeader>
+                  <CardTitle>Water Quality Distribution</CardTitle>
+                  <CardDescription>Current status of water sources</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {waterQualityData.length > 0 ? (
+                    <>
+                      <ResponsiveContainer width="100%" height={300}>
+                        <PieChart>
+                          <Pie
+                            data={waterQualityData}
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={60}
+                            outerRadius={100}
+                            paddingAngle={5}
+                            dataKey="value"
+                          >
+                            {waterQualityData.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={entry.color} />
+                            ))}
+                          </Pie>
+                          <Tooltip />
+                        </PieChart>
+                      </ResponsiveContainer>
+                      <div className="flex justify-center gap-4 mt-4">
+                        {waterQualityData.map((item, index) => (
+                          <div key={index} className="flex items-center gap-2">
+                            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }} />
+                            <span className="text-sm">
+                              {item.name}: {item.value}%
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  ) : (
+                    <div className="h-[300px] flex items-center justify-center text-muted-foreground">
+                      <div className="text-center">
+                        <Droplets className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                        <p>No water quality data available</p>
+                        <p className="text-sm">Conduct water quality tests to see distribution</p>
+                      </div>
                     </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+                  )}
+                </CardContent>
+              </Card>
+            </FieldWorkerPlus>
           </div>
 
           {/* Recent Activity */}

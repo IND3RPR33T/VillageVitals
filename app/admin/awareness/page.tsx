@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { getAuth, onAuthStateChanged, User } from 'firebase/auth';
 import { collection, addDoc, getDocs, deleteDoc, doc, updateDoc, query, orderBy, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { uploadImage, compressImage, validateImageFile } from '@/lib/cloudinary-service';
 import styles from './awareness.module.css';
 
 interface AwarenessContent {
@@ -38,6 +39,12 @@ export default function AwarenessAdminPage() {
         link: '',
         priority: 'medium' as const,
     });
+    
+    // Image upload state
+    const [imageFile, setImageFile] = useState<File | null>(null);
+    const [imagePreview, setImagePreview] = useState<string>('');
+    const [imageUploading, setImageUploading] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
         const auth = getAuth();
@@ -55,7 +62,7 @@ export default function AwarenessAdminPage() {
 
     const loadContents = async () => {
         try {
-            const q = query(collection(db, 'awarenessContent'), orderBy('createdAt', 'desc'));
+            const q = query(collection(db, 'awareness_content'), orderBy('createdAt', 'desc'));
             const snapshot = await getDocs(q);
             const contentList: AwarenessContent[] = [];
             snapshot.forEach((doc) => {
@@ -67,21 +74,85 @@ export default function AwarenessAdminPage() {
         }
     };
 
+    const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        // Validate the file
+        const validationResult = validateImageFile(file);
+        if (!validationResult.valid) {
+            alert(validationResult.error);
+            return;
+        }
+
+        setImageFile(file);
+        
+        // Create preview
+        const reader = new FileReader();
+        reader.onload = () => {
+            setImagePreview(reader.result as string);
+        };
+        reader.readAsDataURL(file);
+    };
+
+    const handleImageUpload = async (): Promise<string> => {
+        if (!imageFile) return formData.imageUrl;
+        
+        setImageUploading(true);
+        try {
+            // Compress image before upload
+            const compressedFile = await compressImage(imageFile, 800, 0.8);
+            
+            // Upload to Cloudinary
+            const result = await uploadImage(compressedFile, {
+                folder: 'awareness_content',
+                quality: 'auto',
+                format: 'auto',
+            });
+            
+            return result.secure_url;
+        } catch (error) {
+            console.error('Error uploading image:', error);
+            throw error;
+        } finally {
+            setImageUploading(false);
+        }
+    };
+
+    const clearImageSelection = () => {
+        setImageFile(null);
+        setImagePreview('');
+        if (fileInputRef.current) {
+            fileInputRef.current.value = '';
+        }
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!user) return;
 
         try {
+            // Upload image if selected
+            let imageUrl = formData.imageUrl;
+            if (imageFile) {
+                imageUrl = await handleImageUpload();
+            }
+
+            const contentData = {
+                ...formData,
+                imageUrl,
+            };
+
             if (editingId) {
                 // Update existing
-                await updateDoc(doc(db, 'awarenessContent', editingId), {
-                    ...formData,
+                await updateDoc(doc(db, 'awareness_content', editingId), {
+                    ...contentData,
                     updatedAt: serverTimestamp(),
                 });
             } else {
                 // Add new
-                await addDoc(collection(db, 'awarenessContent'), {
-                    ...formData,
+                await addDoc(collection(db, 'awareness_content'), {
+                    ...contentData,
                     isActive: true,
                     createdAt: serverTimestamp(),
                     updatedAt: serverTimestamp(),
@@ -106,6 +177,7 @@ export default function AwarenessAdminPage() {
             link: content.link || '',
             priority: content.priority,
         });
+        setImagePreview(content.imageUrl || '');
         setEditingId(content.id);
         setIsAddingNew(true);
     };
@@ -114,7 +186,7 @@ export default function AwarenessAdminPage() {
         if (!confirm('Are you sure you want to delete this content?')) return;
 
         try {
-            await deleteDoc(doc(db, 'awarenessContent', id));
+            await deleteDoc(doc(db, 'awareness_content', id));
             loadContents();
         } catch (error) {
             console.error('Error deleting content:', error);
@@ -124,7 +196,7 @@ export default function AwarenessAdminPage() {
 
     const toggleActive = async (id: string, currentStatus: boolean) => {
         try {
-            await updateDoc(doc(db, 'awarenessContent', id), {
+            await updateDoc(doc(db, 'awareness_content', id), {
                 isActive: !currentStatus,
                 updatedAt: serverTimestamp(),
             });
@@ -145,6 +217,12 @@ export default function AwarenessAdminPage() {
         });
         setIsAddingNew(false);
         setEditingId(null);
+        // Clear image state
+        setImageFile(null);
+        setImagePreview('');
+        if (fileInputRef.current) {
+            fileInputRef.current.value = '';
+        }
     };
 
     const getCategoryLabel = (category: string) => {
@@ -248,13 +326,52 @@ export default function AwarenessAdminPage() {
                             </div>
 
                             <div className={styles.formGroup}>
-                                <label>Image URL (optional)</label>
-                                <input
-                                    type="url"
-                                    value={formData.imageUrl}
-                                    onChange={(e) => setFormData({ ...formData, imageUrl: e.target.value })}
-                                    placeholder="https://example.com/image.jpg"
-                                />
+                                <label>Image (optional)</label>
+                                <div className={styles.imageUploadSection}>
+                                    <input
+                                        ref={fileInputRef}
+                                        type="file"
+                                        accept="image/*"
+                                        onChange={handleImageSelect}
+                                        style={{ display: 'none' }}
+                                        id="awareness-image-upload"
+                                    />
+                                    
+                                    {imagePreview ? (
+                                        <div className={styles.imagePreviewContainer}>
+                                            <img 
+                                                src={imagePreview} 
+                                                alt="Preview" 
+                                                className={styles.imagePreview}
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={clearImageSelection}
+                                                className={styles.removeImageButton}
+                                            >
+                                                ✕ Remove
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <label 
+                                            htmlFor="awareness-image-upload"
+                                            className={styles.uploadButton}
+                                        >
+                                            📷 Choose Image
+                                        </label>
+                                    )}
+                                    
+                                    {imageUploading && (
+                                        <div className={styles.uploadingIndicator}>
+                                            <span className={styles.spinner}></span>
+                                            Uploading...
+                                        </div>
+                                    )}
+                                    
+                                    <p className={styles.imageHint}>
+                                        Supported formats: JPG, PNG, WebP (max 10MB)
+                                    </p>
+                                </div>
                             </div>
 
                             <div className={styles.formGroup}>

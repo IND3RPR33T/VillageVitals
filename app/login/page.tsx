@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -14,7 +14,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Mail, Phone, Lock, User, ArrowLeft, Loader2, CheckCircle, AlertCircle } from "lucide-react"
 import { Logo } from "@/components/logo"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { signIn, signUp, signInWithGoogle } from "@/lib/firebase-auth"
 
 export default function LoginPage() {
@@ -23,6 +23,15 @@ export default function LoginPage() {
   const [error, setError] = useState("")
   const [success, setSuccess] = useState("")
   const router = useRouter()
+  const searchParams = useSearchParams()
+
+  // Check if user just verified their email
+  useEffect(() => {
+    const verified = searchParams.get('verified')
+    if (verified === 'true') {
+      setSuccess("Email verified successfully! You can now login with your credentials.")
+    }
+  }, [searchParams])
 
   // Login form state
   const [loginData, setLoginData] = useState({
@@ -91,19 +100,38 @@ export default function LoginPage() {
     }
 
     try {
-      await signUp({
-        email: registerData.email,
-        password: registerData.password,
-        firstName: registerData.firstName,
-        lastName: registerData.lastName,
-        phone: registerData.phone,
-        role: registerData.role as 'asha_worker' | 'health_official' | 'field_worker' | 'admin',
+      const response = await fetch('/api/auth/signup', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          firstName: registerData.firstName,
+          lastName: registerData.lastName,
+          email: registerData.email,
+          phone: registerData.phone,
+          password: registerData.password,
+          role: registerData.role,
+        }),
       })
 
-      setSuccess("Account created successfully! Redirecting to dashboard...")
-      setTimeout(() => {
-        router.push("/dashboard")
-      }, 1500)
+      const data = await response.json()
+
+      if (response.ok) {
+        if (data.requiresOTPVerification) {
+          setSuccess("Registration successful! Check your email for verification code.")
+          setTimeout(() => {
+            router.push(`/verify-otp?email=${encodeURIComponent(registerData.email)}&name=${encodeURIComponent(registerData.firstName)}`)
+          }, 1500)
+        } else {
+          setSuccess("Account created successfully! Redirecting to dashboard...")
+          setTimeout(() => {
+            router.push("/dashboard")
+          }, 1500)
+        }
+      } else {
+        setError(data.error || "Registration failed")
+      }
     } catch (error: any) {
       setError(error.message || "Registration failed")
     } finally {

@@ -43,6 +43,7 @@ export default function HealthReportPage() {
   const [selectedSymptoms, setSelectedSymptoms] = useState<string[]>([])
   const [customSymptom, setCustomSymptom] = useState("")
   const [uploadedImages, setUploadedImages] = useState<File[]>([])
+  const [imageUploading, setImageUploading] = useState<boolean[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isSubmitted, setIsSubmitted] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
