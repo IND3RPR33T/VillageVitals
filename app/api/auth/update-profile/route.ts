@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getUserById, sql } from '@/lib/db';
+import { doc, getDoc, updateDoc, query, collection, where, getDocs, serverTimestamp } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 import { verifyToken } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
@@ -35,7 +36,7 @@ export async function PUT(request: NextRequest) {
     }
 
     // Validate role
-    const validRoles = ['community', 'health-worker', 'admin'];
+    const validRoles = ['COMMUNITY_MEMBER', 'ASHA_WORKER', 'ADMIN', 'HEALTH_OFFICIAL', 'community', 'health-worker', 'admin'];
     if (!validRoles.includes(role)) {
       return NextResponse.json(
         { error: 'Invalid role selected' },
@@ -43,53 +44,67 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    // Check if phone number is already used by another user
-    const existingPhone = await sql`
-      SELECT id FROM users 
-      WHERE phone = ${phone} AND id != ${payload.userId}
-      LIMIT 1
-    `;
+    // Map role to Firebase format
+    const roleMap: Record<string, string> = {
+      'community': 'COMMUNITY_MEMBER',
+      'health-worker': 'ASHA_WORKER',
+      'admin': 'ADMIN',
+      'COMMUNITY_MEMBER': 'COMMUNITY_MEMBER',
+      'ASHA_WORKER': 'ASHA_WORKER',
+      'ADMIN': 'ADMIN',
+      'HEALTH_OFFICIAL': 'HEALTH_OFFICIAL',
+    };
+    const normalizedRole = roleMap[role] || 'COMMUNITY_MEMBER';
 
-    if (existingPhone.length > 0) {
+    // Check if phone number is already used by another user
+    const usersRef = collection(db, 'users');
+    const phoneQuery = query(usersRef, where('phone', '==', phone));
+    const phoneSnapshot = await getDocs(phoneQuery);
+    
+    const otherUserWithPhone = phoneSnapshot.docs.find(doc => 
+      doc.id !== payload.userId && doc.data().uid !== payload.userId
+    );
+    
+    if (otherUserWithPhone) {
       return NextResponse.json(
         { error: 'Phone number is already in use by another account' },
         { status: 409 }
       );
     }
 
-    // Update user profile
-    const result = await sql`
-      UPDATE users 
-      SET 
-        first_name = ${firstName},
-        last_name = ${lastName},
-        phone = ${phone},
-        role = ${role},
-        updated_at = CURRENT_TIMESTAMP
-      WHERE id = ${payload.userId}
-      RETURNING id, first_name, last_name, email, phone, role, is_verified, created_at
-    `;
-
-    if (result.length === 0) {
+    // Get user document
+    const userDocRef = doc(db, 'users', payload.userId);
+    const userDoc = await getDoc(userDocRef);
+    
+    if (!userDoc.exists()) {
       return NextResponse.json(
         { error: 'User not found' },
         { status: 404 }
       );
     }
 
-    const updatedUser = result[0];
+    // Update user profile
+    await updateDoc(userDocRef, {
+      firstName,
+      lastName,
+      phone,
+      role: normalizedRole,
+      updatedAt: serverTimestamp(),
+    });
+
+    const userData = userDoc.data();
 
     return NextResponse.json({
       message: 'Profile updated successfully',
       user: {
-        id: updatedUser.id,
-        firstName: updatedUser.first_name,
-        lastName: updatedUser.last_name,
-        email: updatedUser.email,
-        phone: updatedUser.phone,
-        role: updatedUser.role,
-        isVerified: updatedUser.is_verified,
-        createdAt: updatedUser.created_at,
+        id: payload.userId,
+        firstName,
+        lastName,
+        email: userData.email,
+        phone,
+        role: normalizedRole,
+        isVerified: userData.isVerified,
+        createdAt: userData.createdAt?.toDate?.() || userData.createdAt,
       },
     });
 

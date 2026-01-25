@@ -294,11 +294,11 @@ export default function ReportsPage() {
                                 <Eye className="h-4 w-4 mr-1" />
                                 View
                               </Button>
-                              {isAdmin && (
+                              {isAdmin && report.id && (
                                 <Button
                                   variant="outline"
                                   size="sm"
-                                  onClick={() => handleDelete('symptom_reports', report.id)}
+                                  onClick={() => handleDelete('symptom_reports', report.id!)}
                                   className="text-red-600 hover:text-red-700"
                                 >
                                   <Trash2 className="h-4 w-4" />
@@ -348,9 +348,9 @@ export default function ReportsPage() {
                                 </span>
                               </div>
                               <div className="flex gap-4 text-sm mt-2">
-                                <span><strong>pH:</strong> {report.pHLevel}</span>
-                                <span><strong>Chlorine:</strong> {report.chlorineLevel} mg/L</span>
-                                <span><strong>Bacteria:</strong> {report.bacteriaPresent ? 'Present' : 'Not Detected'}</span>
+                                <span><strong>pH:</strong> {report.pHLevel ?? report.measurements?.coliform ?? 'N/A'}</span>
+                                <span><strong>Chlorine:</strong> {report.chlorineLevel ?? 'N/A'} mg/L</span>
+                                <span><strong>Bacteria:</strong> {report.bacteriaPresent !== undefined ? (report.bacteriaPresent ? 'Present' : 'Not Detected') : 'N/A'}</span>
                               </div>
                             </div>
                             <div className="flex gap-2">
@@ -358,11 +358,11 @@ export default function ReportsPage() {
                                 <Eye className="h-4 w-4 mr-1" />
                                 View
                               </Button>
-                              {isAdmin && (
+                              {isAdmin && report.id && (
                                 <Button
                                   variant="outline"
                                   size="sm"
-                                  onClick={() => handleDelete('water_quality_tests', report.id)}
+                                  onClick={() => handleDelete('water_quality_tests', report.id!)}
                                   className="text-red-600 hover:text-red-700"
                                 >
                                   <Trash2 className="h-4 w-4" />
@@ -399,7 +399,9 @@ export default function ReportsPage() {
                       <p><span className="font-medium">State:</span> {(selectedReport as HealthReport).state}</p>
                       <p><span className="font-medium">Reporter:</span> {(selectedReport as HealthReport).reporterName}</p>
                       <p><span className="font-medium">Email:</span> {(selectedReport as HealthReport).reporterEmail}</p>
-                      <p><span className="font-medium">Phone:</span> {(selectedReport as HealthReport).reporterPhone}</p>
+                      {(selectedReport as HealthReport).reporterPhone && (
+                        <p><span className="font-medium">Phone:</span> {(selectedReport as HealthReport).reporterPhone}</p>
+                      )}
                       <p><span className="font-medium">Date Reported:</span> {formatDateDetailed((selectedReport as HealthReport).createdAt)}</p>
                     </div>
                   </div>
@@ -435,8 +437,8 @@ export default function ReportsPage() {
                   <div>
                     <h3 className="font-semibold text-sm text-muted-foreground">LOCATION</h3>
                     <div className="mt-2 space-y-1">
-                      <p><span className="font-medium">Coordinates:</span> {(selectedReport as HealthReport).location.latitude}, {(selectedReport as HealthReport).location.longitude}</p>
-                      <p><span className="font-medium">Address:</span> {(selectedReport as HealthReport).location.address}</p>
+                      <p><span className="font-medium">Coordinates:</span> {(selectedReport as HealthReport).location?.latitude}, {(selectedReport as HealthReport).location?.longitude}</p>
+                      <p><span className="font-medium">Address:</span> {(selectedReport as HealthReport).location?.address}</p>
                     </div>
                   </div>
                 )}
@@ -491,9 +493,9 @@ export default function ReportsPage() {
                   <div>
                     <h3 className="font-semibold text-sm text-muted-foreground">RESULTS</h3>
                     <div className="mt-2 space-y-2">
-                      <p><span className="font-medium">pH Level:</span> {(selectedReport as WaterQualityTest).pHLevel}</p>
-                      <p><span className="font-medium">Chlorine:</span> {(selectedReport as WaterQualityTest).chlorineLevel} mg/L</p>
-                      <p><span className="font-medium">Bacteria:</span> {(selectedReport as WaterQualityTest).bacteriaPresent ? 'Present' : 'Not Detected'}</p>
+                      <p><span className="font-medium">pH Level:</span> {(selectedReport as WaterQualityTest).pHLevel ?? (selectedReport as WaterQualityTest).measurements?.coliform ?? 'N/A'}</p>
+                      <p><span className="font-medium">Chlorine:</span> {(selectedReport as WaterQualityTest).chlorineLevel ?? 'N/A'} mg/L</p>
+                      <p><span className="font-medium">Bacteria:</span> {(selectedReport as WaterQualityTest).bacteriaPresent !== undefined ? ((selectedReport as WaterQualityTest).bacteriaPresent ? 'Present' : 'Not Detected') : 'N/A'}</p>
                       <p>
                         <span className="font-medium">Status:</span>
                         <Badge variant={getStatusColor((selectedReport as WaterQualityTest).status)} className="ml-2">
@@ -511,11 +513,11 @@ export default function ReportsPage() {
                   </div>
                 )}
 
-                {(selectedReport as WaterQualityTest).images && (
+                {(selectedReport as WaterQualityTest).images && (selectedReport as WaterQualityTest).images!.length > 0 && (
                   <div>
                     <h3 className="font-semibold text-sm text-muted-foreground">IMAGES</h3>
                     <div className="mt-2 grid grid-cols-2 md:grid-cols-3 gap-2">
-                      {(selectedReport as WaterQualityTest).images!.map((imageUrl, index) => (
+                      {(selectedReport as WaterQualityTest).images!.map((imageUrl: string, index: number) => (
                         <img
                           key={index}
                           src={imageUrl}

@@ -29,6 +29,7 @@ export interface HealthReport {
     reportedBy: string;
     reporterName: string;
     reporterEmail: string;
+    reporterPhone?: string;
     villageName: string;
     state: string;
     symptoms: string[];
@@ -157,6 +158,11 @@ export interface WaterQualityTest {
     status: 'pending' | 'completed' | 'verified';
     createdAt: Timestamp;
     updatedAt: Timestamp;
+    // Legacy fields for backwards compatibility with Flutter app
+    pHLevel?: number;
+    chlorineLevel?: number;
+    bacteriaPresent?: boolean;
+    images?: string[];
 }
 
 export async function addWaterQualityTest(data: {

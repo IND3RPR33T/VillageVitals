@@ -2,14 +2,13 @@
 
 import { ReactNode } from "react"
 import { useRBAC } from "@/lib/rbac/hooks"
-import { UserRole, ModulePermissions } from "@/lib/rbac/types"
+import { UserRole, Module } from "@/lib/rbac/types"
 import { cn } from "@/lib/utils"
 
 interface RoleRestrictedProps {
   children: ReactNode
   requiredRole?: UserRole | UserRole[]
-  requiredPermission?: keyof ModulePermissions
-  module?: string
+  requiredModule?: Module
   requireWrite?: boolean
   fallback?: ReactNode
   showBlurred?: boolean
@@ -19,14 +18,13 @@ interface RoleRestrictedProps {
 export function RoleRestricted({
   children,
   requiredRole,
-  requiredPermission,
-  module,
+  requiredModule,
   requireWrite = false,
   fallback,
   showBlurred = true,
   className
 }: RoleRestrictedProps) {
-  const { userRole, hasAccess, isLoading } = useRBAC()
+  const { role, canRead, canWrite, isLoading } = useRBAC()
 
   if (isLoading) {
     return (
@@ -41,11 +39,11 @@ export function RoleRestricted({
 
   if (requiredRole) {
     const roles = Array.isArray(requiredRole) ? requiredRole : [requiredRole]
-    hasPermission = roles.includes(userRole)
+    hasPermission = roles.includes(role)
   }
 
-  if (requiredPermission && module) {
-    hasPermission = hasPermission && hasAccess(module, requiredPermission, requireWrite)
+  if (requiredModule) {
+    hasPermission = hasPermission && (requireWrite ? canWrite(requiredModule) : canRead(requiredModule))
   }
 
   // If user has permission, show content normally
@@ -69,7 +67,7 @@ export function RoleRestricted({
               🔒 Access Restricted
             </div>
             <div className="text-sm text-gray-500">
-              {getRoleMessage(userRole, requiredRole)}
+              {getRoleMessage(role, requiredRole)}
             </div>
           </div>
         </div>
@@ -87,13 +85,14 @@ function getRoleMessage(currentRole: UserRole, requiredRole?: UserRole | UserRol
   }
 
   const roles = Array.isArray(requiredRole) ? requiredRole : [requiredRole]
-  const roleNames = roles.map(role => {
-    switch (role) {
-      case 'admin': return 'Administrator'
-      case 'health_official': return 'Health Official'
-      case 'field_worker': return 'Field Worker'
-      case 'asha_worker': return 'ASHA Worker'
-      default: return role
+  const roleNames = roles.map(r => {
+    switch (r) {
+      case 'ADMIN': return 'Administrator'
+      case 'HEALTH_OFFICIAL': return 'Health Official'
+      case 'FIELD_WORKER': return 'Field Worker'
+      case 'ASHA_WORKER': return 'ASHA Worker'
+      case 'USER': return 'User'
+      default: return r
     }
   })
 
@@ -108,7 +107,7 @@ function getRoleMessage(currentRole: UserRole, requiredRole?: UserRole | UserRol
 export function AdminOnly({ children, showBlurred = true, className, fallback }: Omit<RoleRestrictedProps, 'requiredRole'>) {
   return (
     <RoleRestricted 
-      requiredRole="admin" 
+      requiredRole="ADMIN" 
       showBlurred={showBlurred} 
       className={className}
       fallback={fallback}
@@ -121,7 +120,7 @@ export function AdminOnly({ children, showBlurred = true, className, fallback }:
 export function HealthOfficialOnly({ children, showBlurred = true, className, fallback }: Omit<RoleRestrictedProps, 'requiredRole'>) {
   return (
     <RoleRestricted 
-      requiredRole={['admin', 'health_official']} 
+      requiredRole={['ADMIN', 'HEALTH_OFFICIAL']} 
       showBlurred={showBlurred} 
       className={className}
       fallback={fallback}
@@ -134,7 +133,7 @@ export function HealthOfficialOnly({ children, showBlurred = true, className, fa
 export function FieldWorkerPlus({ children, showBlurred = true, className, fallback }: Omit<RoleRestrictedProps, 'requiredRole'>) {
   return (
     <RoleRestricted 
-      requiredRole={['admin', 'health_official', 'field_worker']} 
+      requiredRole={['ADMIN', 'HEALTH_OFFICIAL', 'FIELD_WORKER']} 
       showBlurred={showBlurred} 
       className={className}
       fallback={fallback}

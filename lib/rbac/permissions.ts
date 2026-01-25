@@ -29,7 +29,7 @@ const ASHA_WORKER_PERMISSIONS: RolePermissions = {
   DASHBOARD: perm(true, false),      // READ only
   HEALTH_REPORTS: perm(true, true),  // READ + WRITE
   WATER_QUALITY: perm(true, false),  // READ only
-  HEALTH_MAP: perm(true, false),     // READ only (auto-generated)
+  HEALTH_MAPS: perm(true, false),    // READ only (auto-generated)
   ALERTS: perm(true, false),         // READ only
   EDUCATION: perm(true, true),       // READ + WRITE (CRITICAL: ASHA workers CAN publish)
   COMMUNITY: perm(true, true),       // READ + WRITE (can post community updates)
@@ -46,7 +46,7 @@ const FIELD_WORKER_PERMISSIONS: RolePermissions = {
   DASHBOARD: perm(true, false),      // READ only
   HEALTH_REPORTS: perm(true, true),  // READ + WRITE
   WATER_QUALITY: perm(true, true),   // READ + WRITE
-  HEALTH_MAP: perm(true, false),     // READ only (auto-generated)
+  HEALTH_MAPS: perm(true, false),    // READ only (auto-generated)
   ALERTS: perm(true, false),         // READ only
   EDUCATION: perm(true, false),      // READ only (CANNOT publish awareness content)
   COMMUNITY: perm(true, false),      // READ only
@@ -63,7 +63,7 @@ const HEALTH_OFFICIAL_PERMISSIONS: RolePermissions = {
   DASHBOARD: perm(true, false),      // READ only
   HEALTH_REPORTS: perm(true, false), // READ only
   WATER_QUALITY: perm(true, false),  // READ only
-  HEALTH_MAP: perm(true, false),     // READ only (auto-generated)
+  HEALTH_MAPS: perm(true, false),    // READ only (auto-generated)
   ALERTS: perm(true, true),          // READ + WRITE (can create/manage alerts)
   EDUCATION: perm(true, false),      // READ only (CANNOT publish awareness content)
   COMMUNITY: perm(true, true),       // READ + WRITE (can post official announcements)
@@ -80,7 +80,7 @@ const ADMIN_PERMISSIONS: RolePermissions = {
   DASHBOARD: perm(true, false),      // READ only (dashboard is view-only for all)
   HEALTH_REPORTS: perm(true, true),  // READ + WRITE
   WATER_QUALITY: perm(true, true),   // READ + WRITE
-  HEALTH_MAP: perm(true, false),     // READ only (auto-generated, no manual edits)
+  HEALTH_MAPS: perm(true, false),    // READ only (auto-generated, no manual edits)
   ALERTS: perm(true, true),          // READ + WRITE
   EDUCATION: perm(true, true),       // READ + WRITE
   COMMUNITY: perm(true, true),       // READ + WRITE (full community management)
@@ -97,7 +97,7 @@ const USER_PERMISSIONS: RolePermissions = {
   DASHBOARD: perm(true, false),      // READ only
   HEALTH_REPORTS: perm(true, false), // READ only
   WATER_QUALITY: perm(true, false),  // READ only
-  HEALTH_MAP: perm(true, false),     // READ only
+  HEALTH_MAPS: perm(true, false),    // READ only
   ALERTS: perm(true, false),         // READ only
   EDUCATION: perm(true, false),      // READ only (CANNOT publish)
   COMMUNITY: perm(true, false),      // READ only

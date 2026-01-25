@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, query, collection, where, getDocs, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { sendWelcomeEmail } from '@/lib/email';
 
@@ -68,8 +68,51 @@ export async function POST(req: NextRequest) {
     // OTP is valid - mark as verified
     await updateDoc(otpDocRef, {
       verified: true,
-      verifiedAt: new Date(),
+      verifiedAt: serverTimestamp(),
     });
+
+    // Update user's isVerified status in Firestore
+    // Try finding user by email document ID first
+    const userDocRef = doc(db, 'users', email.toLowerCase());
+    const userDoc = await getDoc(userDocRef);
+    
+    if (userDoc.exists()) {
+      await updateDoc(userDocRef, {
+        isVerified: true,
+        isActive: true,
+        verifiedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      
+      // Also update by UID if available
+      const userData = userDoc.data();
+      if (userData.uid) {
+        const uidDocRef = doc(db, 'users', userData.uid);
+        const uidDoc = await getDoc(uidDocRef);
+        if (uidDoc.exists()) {
+          await updateDoc(uidDocRef, {
+            isVerified: true,
+            isActive: true,
+            verifiedAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          });
+        }
+      }
+    } else {
+      // Try finding by email field
+      const usersRef = collection(db, 'users');
+      const q = query(usersRef, where('email', '==', email.toLowerCase()));
+      const querySnapshot = await getDocs(q);
+      
+      for (const userDocSnap of querySnapshot.docs) {
+        await updateDoc(userDocSnap.ref, {
+          isVerified: true,
+          isActive: true,
+          verifiedAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+      }
+    }
 
     // Send welcome email
     if (name) {
