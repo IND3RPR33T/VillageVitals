@@ -330,3 +330,377 @@ export async function getSymptomReports(limitCount = 100) {
         return [];
     }
 }
+
+// ============== ROLE-BASED QUERIES ==============
+
+import { getCurrentUserRole, canViewAllReports, canViewAllWaterTests } from './role-service';
+
+// Get health reports based on user role
+export async function getHealthReportsForRole(limitCount = 50): Promise<HealthReport[]> {
+    try {
+        const user = auth.currentUser;
+        if (!user) return [];
+
+        const role = await getCurrentUserRole();
+
+        let q;
+        if (canViewAllReports(role)) {
+            // Admin/Health Worker: see all reports
+            q = query(
+                collection(db, 'health_reports'),
+                orderBy('createdAt', 'desc'),
+                limit(limitCount)
+            );
+        } else {
+            // Community User: see only own reports
+            q = query(
+                collection(db, 'health_reports'),
+                where('reportedBy', '==', user.uid),
+                orderBy('createdAt', 'desc'),
+                limit(limitCount)
+            );
+        }
+
+        const snapshot = await getDocs(q);
+        return snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        })) as HealthReport[];
+    } catch (error) {
+        console.error('Error fetching health reports for role:', error);
+        return [];
+    }
+}
+
+// Get water quality tests based on user role
+export async function getWaterQualityTestsForRole(limitCount = 50): Promise<WaterQualityTest[]> {
+    try {
+        const user = auth.currentUser;
+        if (!user) return [];
+
+        const role = await getCurrentUserRole();
+
+        let q;
+        if (canViewAllWaterTests(role)) {
+            // Admin/Health Worker: see all tests
+            q = query(
+                collection(db, 'water_quality_tests'),
+                orderBy('createdAt', 'desc'),
+                limit(limitCount)
+            );
+        } else {
+            // Community User: see only own tests
+            q = query(
+                collection(db, 'water_quality_tests'),
+                where('testedBy', '==', user.uid),
+                orderBy('createdAt', 'desc'),
+                limit(limitCount)
+            );
+        }
+
+        const snapshot = await getDocs(q);
+        return snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        })) as WaterQualityTest[];
+    } catch (error) {
+        console.error('Error fetching water tests for role:', error);
+        return [];
+    }
+}
+
+// Get symptom reports based on user role
+export async function getSymptomReportsForRole(limitCount = 100) {
+    try {
+        const user = auth.currentUser;
+        if (!user) return [];
+
+        const role = await getCurrentUserRole();
+
+        let q;
+        if (canViewAllReports(role)) {
+            // Admin/Health Worker: see all reports
+            q = query(
+                collection(db, 'symptom_reports'),
+                orderBy('createdAt', 'desc'),
+                limit(limitCount)
+            );
+        } else {
+            // Community User: see only own reports
+            q = query(
+                collection(db, 'symptom_reports'),
+                where('reportedBy', '==', user.uid),
+                orderBy('createdAt', 'desc'),
+                limit(limitCount)
+            );
+        }
+
+        const snapshot = await getDocs(q);
+        return snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        }));
+    } catch (error) {
+        console.error('Error fetching symptom reports for role:', error);
+        return [];
+    }
+}
+
+// Get alerts based on user role
+export async function getAlertsForRole(limitCount = 50): Promise<Alert[]> {
+    try {
+        const user = auth.currentUser;
+        if (!user) return [];
+
+        const role = await getCurrentUserRole();
+
+        let q;
+        if (canViewAllReports(role)) {
+            // Admin/Health Worker: see all active alerts
+            q = query(
+                collection(db, 'alerts'),
+                where('isActive', '==', true),
+                orderBy('createdAt', 'desc'),
+                limit(limitCount)
+            );
+        } else {
+            // Community User: see only public alerts or their own
+            q = query(
+                collection(db, 'alerts'),
+                where('isActive', '==', true),
+                where('targetAudience', 'in', ['all', 'community']),
+                orderBy('createdAt', 'desc'),
+                limit(limitCount)
+            );
+        }
+
+        const snapshot = await getDocs(q);
+        return snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        })) as Alert[];
+    } catch (error) {
+        console.error('Error fetching alerts for role:', error);
+        return [];
+    }
+}
+
+// Check if current user can delete a specific document
+export async function canDeleteDocument(documentUserId: string): Promise<boolean> {
+    const user = auth.currentUser;
+    if (!user) return false;
+
+    const role = await getCurrentUserRole();
+
+    // Admins can delete anything
+    if (role === 'admin') return true;
+
+    // Users can only delete their own documents
+    return user.uid === documentUserId;
+}
+
+// Check if current user can edit a specific document
+export async function canEditDocument(documentUserId: string): Promise<boolean> {
+    const user = auth.currentUser;
+    if (!user) return false;
+
+    const role = await getCurrentUserRole();
+
+    // Admins can edit anything
+    if (role === 'admin') return true;
+
+    // Users can only edit their own documents
+    return user.uid === documentUserId;
+}
+
+// ============== ADMIN FUNCTIONS ==============
+
+import { deleteDoc } from 'firebase/firestore';
+
+// Get all users (admin only)
+export async function getAllUsers(): Promise<any[]> {
+    try {
+        const snapshot = await getDocs(collection(db, 'users'));
+        return snapshot.docs.map(doc => ({
+            id: doc.id,
+            uid: doc.id,
+            ...doc.data()
+        }));
+    } catch (error) {
+        console.error('Error fetching all users:', error);
+        return [];
+    }
+}
+
+// Get emergency alerts from Flutter app
+export async function getEmergencyAlerts(limitCount = 100): Promise<any[]> {
+    try {
+        const q = query(
+            collection(db, 'emergency_alerts'),
+            orderBy('createdAt', 'desc'),
+            limit(limitCount)
+        );
+
+        const snapshot = await getDocs(q);
+        return snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        }));
+    } catch (error) {
+        console.error('Error fetching emergency alerts:', error);
+        return [];
+    }
+}
+
+// Delete document by collection and id (admin only)
+export async function deleteDocument(collectionName: string, docId: string): Promise<boolean> {
+    try {
+        const user = auth.currentUser;
+        if (!user) throw new Error('Not authenticated');
+
+        const role = await getCurrentUserRole();
+        if (role !== 'admin') throw new Error('Admin access required');
+
+        await deleteDoc(doc(db, collectionName, docId));
+        console.log(`Deleted ${collectionName}/${docId}`);
+        return true;
+    } catch (error) {
+        console.error('Error deleting document:', error);
+        return false;
+    }
+}
+
+// Update document status (admin only)
+export async function updateDocumentStatus(
+    collectionName: string,
+    docId: string,
+    status: string
+): Promise<boolean> {
+    try {
+        const user = auth.currentUser;
+        if (!user) throw new Error('Not authenticated');
+
+        const role = await getCurrentUserRole();
+        if (role !== 'admin') throw new Error('Admin access required');
+
+        await updateDoc(doc(db, collectionName, docId), {
+            status,
+            updatedAt: serverTimestamp()
+        });
+        return true;
+    } catch (error) {
+        console.error('Error updating document:', error);
+        return false;
+    }
+}
+
+// ============== AWARENESS CONTENT ==============
+
+export interface AwarenessContent {
+    id?: string;
+    title: string;
+    description: string;
+    content: string;
+    category: 'health_tips' | 'disease_prevention' | 'water_safety' | 'emergency_prep' | 'nutrition' | 'general';
+    imageUrl?: string;
+    isFeatured: boolean;
+    isActive: boolean;
+    createdBy: string;
+    createdAt: any;
+    updatedAt: any;
+}
+
+// Add awareness content (admin only)
+export async function addAwarenessContent(data: {
+    title: string;
+    description: string;
+    content: string;
+    category: string;
+    imageUrl?: string;
+    isFeatured?: boolean;
+}): Promise<string> {
+    const user = auth.currentUser;
+    if (!user) throw new Error('Not authenticated');
+
+    const role = await getCurrentUserRole();
+    if (role !== 'admin') throw new Error('Admin access required');
+
+    const awarenessData: Omit<AwarenessContent, 'id'> = {
+        title: data.title,
+        description: data.description,
+        content: data.content,
+        category: data.category as AwarenessContent['category'],
+        imageUrl: data.imageUrl || '',
+        isFeatured: data.isFeatured || false,
+        isActive: true,
+        createdBy: user.uid,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+    };
+
+    const docRef = await addDoc(collection(db, 'awareness_content'), awarenessData);
+    console.log('Awareness content added:', docRef.id);
+    return docRef.id;
+}
+
+// Get awareness content
+export async function getAwarenessContent(limitCount = 50): Promise<AwarenessContent[]> {
+    try {
+        const q = query(
+            collection(db, 'awareness_content'),
+            where('isActive', '==', true),
+            orderBy('createdAt', 'desc'),
+            limit(limitCount)
+        );
+
+        const snapshot = await getDocs(q);
+        return snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        })) as AwarenessContent[];
+    } catch (error) {
+        console.error('Error fetching awareness content:', error);
+        return [];
+    }
+}
+
+// Update awareness content (admin only)
+export async function updateAwarenessContent(
+    docId: string,
+    data: Partial<AwarenessContent>
+): Promise<boolean> {
+    try {
+        const user = auth.currentUser;
+        if (!user) throw new Error('Not authenticated');
+
+        const role = await getCurrentUserRole();
+        if (role !== 'admin') throw new Error('Admin access required');
+
+        await updateDoc(doc(db, 'awareness_content', docId), {
+            ...data,
+            updatedAt: serverTimestamp()
+        });
+        return true;
+    } catch (error) {
+        console.error('Error updating awareness content:', error);
+        return false;
+    }
+}
+
+// Delete awareness content (admin only)
+export async function deleteAwarenessContent(docId: string): Promise<boolean> {
+    try {
+        const user = auth.currentUser;
+        if (!user) throw new Error('Not authenticated');
+
+        const role = await getCurrentUserRole();
+        if (role !== 'admin') throw new Error('Admin access required');
+
+        await deleteDoc(doc(db, 'awareness_content', docId));
+        return true;
+    } catch (error) {
+        console.error('Error deleting awareness content:', error);
+        return false;
+    }
+}
+

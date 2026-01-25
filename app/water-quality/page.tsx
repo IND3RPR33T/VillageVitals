@@ -18,46 +18,8 @@ import { format } from "date-fns"
 import { CalendarIcon, Droplets, AlertTriangle, CheckCircle, TrendingUp, Eye, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Area, AreaChart } from "recharts"
-
-// Mock data for water quality trends
-const waterQualityTrends = [
-  { month: "Jan", turbidity: 8.2, nitrate: 12, risk: 15 },
-  { month: "Feb", turbidity: 9.1, nitrate: 20, risk: 18 },
-  { month: "Mar", turbidity: 7.8, nitrate: 10, risk: 12 },
-  { month: "Apr", turbidity: 6.5, nitrate: 15, risk: 8 },
-  { month: "May", turbidity: 8.9, nitrate: 25, risk: 16 },
-  { month: "Jun", turbidity: 5.2, nitrate: 8, risk: 6 },
-]
-
-const recentTests = [
-  {
-    id: 1,
-    location: "Main Well - Kamakhya Village",
-    turbidity: 8.5,
-    nitrate: 12,
-    risk: "low",
-    date: "2024-01-15",
-    tester: "Water Inspector Ram",
-  },
-  {
-    id: 2,
-    location: "River Source - Majuli Village",
-    turbidity: 15.2,
-    nitrate: 28,
-    risk: "moderate",
-    date: "2024-01-14",
-    tester: "Health Worker Priya",
-  },
-  {
-    id: 3,
-    location: "Community Pump - Dibrugarh",
-    turbidity: 22.8,
-    nitrate: 40,
-    risk: "high",
-    date: "2024-01-13",
-    tester: "Dr. Sharma",
-  },
-]
+import { getWaterQualityTestsForRole, type WaterQualityTest } from "@/lib/firestore-service"
+import { getCurrentUserRole } from "@/lib/role-service"
 
 const getRiskColor = (risk: string) => {
   switch (risk) {
@@ -131,7 +93,65 @@ export default function WaterQualityPage() {
   const [isLoadingPrediction, setIsLoadingPrediction] = useState(false)
   const [predictionError, setPredictionError] = useState<string | null>(null)
 
+  // Firebase data
+  const [recentTests, setRecentTests] = useState<WaterQualityTest[]>([])
+  const [waterQualityTrends, setWaterQualityTrends] = useState<any[]>([])
+  const [isAdmin, setIsAdmin] = useState(false)
+  const [loading, setLoading] = useState(true)
+
   const hasValues = coliform && turbidity && bod && cod && nitrate && ammonia
+
+  // Load real data from Firebase
+  useEffect(() => {
+    loadData()
+  }, [])
+
+  const loadData = async () => {
+    try {
+      const [tests, role] = await Promise.all([
+        getWaterQualityTestsForRole(50),
+        getCurrentUserRole(),
+      ])
+      setRecentTests(tests)
+      setIsAdmin(role === 'admin')
+
+      // Generate trends from real data
+      const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+      const monthData: Record<string, { turbidity: number[], nitrate: number[], count: number }> = {}
+
+      tests.forEach(t => {
+        try {
+          const d = t.createdAt?.toDate ? t.createdAt.toDate() : new Date(t.createdAt as any)
+          const month = monthNames[d.getMonth()]
+          if (!monthData[month]) monthData[month] = { turbidity: [], nitrate: [], count: 0 }
+          if (t.measurements?.turbidity) monthData[month].turbidity.push(t.measurements.turbidity)
+          if (t.measurements?.nitrate) monthData[month].nitrate.push(t.measurements.nitrate)
+          monthData[month].count++
+        } catch { }
+      })
+
+      const trends = Object.entries(monthData).map(([month, data]) => ({
+        month,
+        turbidity: data.turbidity.length > 0 ? Math.round(data.turbidity.reduce((a, b) => a + b, 0) / data.turbidity.length * 10) / 10 : 0,
+        nitrate: data.nitrate.length > 0 ? Math.round(data.nitrate.reduce((a, b) => a + b, 0) / data.nitrate.length * 10) / 10 : 0,
+        risk: data.count,
+      }))
+
+      setWaterQualityTrends(trends.length > 0 ? trends : [])
+    } catch (error) {
+      console.error('Error loading water tests:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const formatDate = (timestamp: any) => {
+    if (!timestamp) return 'N/A'
+    try {
+      const d = timestamp.toDate ? timestamp.toDate() : new Date(timestamp)
+      return d.toLocaleDateString()
+    } catch { return 'N/A' }
+  }
 
   // Function to get risk prediction from your model
   const getRiskPrediction = async () => {
@@ -545,10 +565,10 @@ export default function WaterQualityPage() {
                             <Progress
                               value={currentRisk.percentage}
                               className={`h-2 ${currentRisk.color === "green"
-                                  ? "[&>div]:bg-green-500"
-                                  : currentRisk.color === "yellow"
-                                    ? "[&>div]:bg-yellow-500"
-                                    : "[&>div]:bg-red-500"
+                                ? "[&>div]:bg-green-500"
+                                : currentRisk.color === "yellow"
+                                  ? "[&>div]:bg-yellow-500"
+                                  : "[&>div]:bg-red-500"
                                 }`}
                             />
                             {currentRisk.confidence && (
@@ -600,8 +620,12 @@ export default function WaterQualityPage() {
                     <CheckCircle className="h-4 w-4 text-green-600" />
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl font-bold text-green-600">65%</div>
-                    <p className="text-xs text-muted-foreground">58 out of 89 sources</p>
+                    <div className="text-2xl font-bold text-green-600">
+                      {recentTests.length > 0 ? `${Math.round(recentTests.filter(t => t.riskAssessment?.level === 'low').length / recentTests.length * 100)}%` : '0%'}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {recentTests.filter(t => t.riskAssessment?.level === 'low').length} out of {recentTests.length} sources
+                    </p>
                   </CardContent>
                 </Card>
 
@@ -611,8 +635,12 @@ export default function WaterQualityPage() {
                     <AlertTriangle className="h-4 w-4 text-yellow-600" />
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl font-bold text-yellow-600">25%</div>
-                    <p className="text-xs text-muted-foreground">22 sources need monitoring</p>
+                    <div className="text-2xl font-bold text-yellow-600">
+                      {recentTests.length > 0 ? `${Math.round(recentTests.filter(t => t.riskAssessment?.level === 'moderate').length / recentTests.length * 100)}%` : '0%'}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {recentTests.filter(t => t.riskAssessment?.level === 'moderate').length} sources need monitoring
+                    </p>
                   </CardContent>
                 </Card>
 
@@ -622,8 +650,12 @@ export default function WaterQualityPage() {
                     <AlertTriangle className="h-4 w-4 text-red-600" />
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl font-bold text-red-600">10%</div>
-                    <p className="text-xs text-muted-foreground">9 sources need immediate action</p>
+                    <div className="text-2xl font-bold text-red-600">
+                      {recentTests.length > 0 ? `${Math.round(recentTests.filter(t => t.riskAssessment?.level === 'high').length / recentTests.length * 100)}%` : '0%'}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {recentTests.filter(t => t.riskAssessment?.level === 'high').length} sources need immediate action
+                    </p>
                   </CardContent>
                 </Card>
               </div>
@@ -690,30 +722,38 @@ export default function WaterQualityPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
-                    {recentTests.map((test) => (
-                      <div key={test.id} className="flex items-center justify-between p-4 border rounded-lg">
-                        <div className="flex items-center gap-4">
-                          <div
-                            className={`w-12 h-12 rounded-lg flex items-center justify-center ${getRiskColor(
-                              test.risk
-                            )}`}
-                          >
-                            <Droplets className="h-6 w-6" />
-                          </div>
-                          <div>
-                            <h4 className="font-medium">{test.location}</h4>
-                            <p className="text-sm text-muted-foreground">
-                              Tested by {test.tester} on {test.date}
-                            </p>
-                            <div className="flex gap-4 mt-1 text-xs text-muted-foreground">
-                              <span>Turbidity: {test.turbidity} NTU</span>
-                              <span>Nitrate: {test.nitrate} mg/L</span>
+                    {recentTests.length === 0 ? (
+                      <div className="text-center py-8 text-muted-foreground">
+                        No water quality tests found. {!isAdmin && "Submit a test to see your data here."}
+                      </div>
+                    ) : (
+                      recentTests.slice(0, 10).map((test) => (
+                        <div key={test.id} className="flex items-center justify-between p-4 border rounded-lg">
+                          <div className="flex items-center gap-4">
+                            <div
+                              className={`w-12 h-12 rounded-lg flex items-center justify-center ${getRiskColor(
+                                test.riskAssessment?.level || 'low'
+                              )}`}
+                            >
+                              <Droplets className="h-6 w-6" />
+                            </div>
+                            <div>
+                              <h4 className="font-medium">{test.location}</h4>
+                              <p className="text-sm text-muted-foreground">
+                                Tested by {test.testerName} on {formatDate(test.createdAt)}
+                              </p>
+                              <div className="flex gap-4 mt-1 text-xs text-muted-foreground">
+                                <span>Turbidity: {test.measurements?.turbidity || 'N/A'} NTU</span>
+                                <span>Nitrate: {test.measurements?.nitrate || 'N/A'} mg/L</span>
+                              </div>
                             </div>
                           </div>
+                          <Badge className={getRiskColor(test.riskAssessment?.level || 'low')}>
+                            {(test.riskAssessment?.level || 'N/A').toUpperCase()} RISK
+                          </Badge>
                         </div>
-                        <Badge className={getRiskColor(test.risk)}>{test.risk.toUpperCase()} RISK</Badge>
-                      </div>
-                    ))}
+                      ))
+                    )}
                   </div>
                 </CardContent>
               </Card>

@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import {
@@ -18,6 +18,7 @@ import {
   LogOut,
   Sun,
   Moon,
+  Shield,
 } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
@@ -25,6 +26,7 @@ import { cn } from "@/lib/utils"
 import { Logo } from "@/components/logo"
 import { UserProfile } from "@/components/user-profile"
 import { useTheme } from "next-themes"
+import { onAuthChange, getCurrentUserProfile } from "@/lib/firebase-auth"
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: Home },
@@ -48,10 +50,10 @@ const getSettingsNavigation = (theme: string | undefined, setTheme: (theme: stri
   { name: "Profile", href: "/profile", icon: Settings },
   { name: "Community", href: "/community", icon: Users },
   { name: "Dark Mode", onClick: () => setTheme(theme === "dark" ? "light" : "dark"), icon: theme === "dark" ? Sun : Moon },
-  { name: "Sign Out", href: "/api/auth/logout", icon: LogOut },
+  { name: "Sign Out", href: "/login", icon: LogOut },
 ]
 
-function Sidebar({ mobile, onClose }: { mobile?: boolean; onClose?: () => void }) {
+function Sidebar({ mobile, onClose, isAdmin }: { mobile?: boolean; onClose?: () => void; isAdmin?: boolean }) {
   const pathname = usePathname()
   const { theme, setTheme } = useTheme()
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
@@ -83,6 +85,21 @@ function Sidebar({ mobile, onClose }: { mobile?: boolean; onClose?: () => void }
             </Link>
           )
         })}
+
+        {/* Admin Link - only visible for admins */}
+        {isAdmin && (
+          <Link
+            href="/admin"
+            className={cn(
+              "flex items-center gap-2 px-3 py-2 text-sm rounded-md transition-colors",
+              pathname === "/admin" ? "bg-red-600 text-white" : "text-red-600 hover:bg-red-50 dark:hover:bg-red-950",
+            )}
+            onClick={() => mobile && onClose?.()}
+          >
+            <Shield className="h-4 w-4" />
+            Admin Panel
+          </Link>
+        )}
       </nav>
 
       {/* Settings Navigation */}
@@ -107,7 +124,7 @@ function Sidebar({ mobile, onClose }: { mobile?: boolean; onClose?: () => void }
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
           </svg>
         </button>
-        
+
         {isSettingsOpen && (
           <nav className="mt-1 ml-2 space-y-1 border-l pl-4">
             {settingsNavigation.map((item) => {
@@ -158,14 +175,27 @@ interface DashboardLayoutProps {
 
 export function DashboardLayout({ children }: DashboardLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [isAdmin, setIsAdmin] = useState(false)
   const { theme, setTheme } = useTheme()
+
+  useEffect(() => {
+    const unsubscribe = onAuthChange(async (user) => {
+      if (user) {
+        const profile = await getCurrentUserProfile()
+        setIsAdmin(profile?.role === 'admin')
+      } else {
+        setIsAdmin(false)
+      }
+    })
+    return () => unsubscribe()
+  }, [])
 
   return (
     <div className="min-h-screen bg-background">
       {/* Desktop Sidebar */}
       <div className="hidden lg:fixed lg:inset-y-0 lg:flex lg:w-64 lg:flex-col">
         <div className="flex flex-col flex-grow border-r bg-card">
-          <Sidebar />
+          <Sidebar isAdmin={isAdmin} />
         </div>
       </div>
 
@@ -181,7 +211,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           </Button>
         </SheetTrigger>
         <SheetContent side="left" className="p-0 w-64">
-          <Sidebar mobile onClose={() => setSidebarOpen(false)} />
+          <Sidebar mobile onClose={() => setSidebarOpen(false)} isAdmin={isAdmin} />
         </SheetContent>
       </Sheet>
 
@@ -199,7 +229,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
             >
               {theme === "dark" ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
             </Button>
-            
+
             <UserProfile />
           </div>
         </div>

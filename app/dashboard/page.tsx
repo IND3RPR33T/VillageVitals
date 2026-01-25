@@ -9,7 +9,16 @@ import { Badge } from "@/components/ui/badge"
 import { Activity, Droplets, AlertTriangle, Users, MapPin, BookOpen, Plus, Eye, Loader2 } from "lucide-react"
 import Link from "next/link"
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts"
-import { getHealthReports, getWaterQualityTests, getAlerts, getSymptomReports, type HealthReport, type WaterQualityTest, type Alert } from "@/lib/firestore-service"
+import {
+  getHealthReportsForRole,
+  getWaterQualityTestsForRole,
+  getAlertsForRole,
+  getSymptomReportsForRole,
+  type HealthReport,
+  type WaterQualityTest,
+  type Alert
+} from "@/lib/firestore-service"
+import { getCurrentUserRole } from "@/lib/role-service"
 
 export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
@@ -17,6 +26,7 @@ export default function DashboardPage() {
   const [waterTests, setWaterTests] = useState<WaterQualityTest[]>([])
   const [alerts, setAlerts] = useState<Alert[]>([])
   const [symptomReports, setSymptomReports] = useState<any[]>([])
+  const [isAdmin, setIsAdmin] = useState(false)
 
   // Computed data for charts
   const [healthTrendsData, setHealthTrendsData] = useState<any[]>([])
@@ -28,37 +38,63 @@ export default function DashboardPage() {
 
   const loadData = async () => {
     try {
-      const [healthData, waterData, alertsData, symptomData] = await Promise.all([
-        getHealthReports(20),
-        getWaterQualityTests(20),
-        getAlerts(10),
-        getSymptomReports(20),
+      const [healthData, waterData, alertsData, symptomData, role] = await Promise.all([
+        getHealthReportsForRole(20),
+        getWaterQualityTestsForRole(20),
+        getAlertsForRole(10),
+        getSymptomReportsForRole(20),
+        getCurrentUserRole(),
       ])
 
       setHealthReports(healthData)
       setWaterTests(waterData)
       setAlerts(alertsData)
       setSymptomReports(symptomData)
+      setIsAdmin(role === 'admin')
 
-      // Calculate water quality distribution
-      const safe = waterData.filter(w => w.riskAssessment?.level === 'low').length
-      const moderate = waterData.filter(w => w.riskAssessment?.level === 'moderate').length
-      const high = waterData.filter(w => w.riskAssessment?.level === 'high').length
-      const total = waterData.length || 1
+      // Calculate water quality distribution from REAL data only
+      const total = waterData.length
+      if (total > 0) {
+        const safe = waterData.filter(w => w.riskAssessment?.level === 'low').length
+        const moderate = waterData.filter(w => w.riskAssessment?.level === 'moderate').length
+        const high = waterData.filter(w => w.riskAssessment?.level === 'high').length
 
-      setWaterQualityData([
-        { name: "Safe", value: Math.round((safe / total) * 100) || 50, color: "#10b981" },
-        { name: "Moderate Risk", value: Math.round((moderate / total) * 100) || 30, color: "#f59e0b" },
-        { name: "High Risk", value: Math.round((high / total) * 100) || 20, color: "#ef4444" },
-      ])
+        setWaterQualityData([
+          { name: "Safe", value: Math.round((safe / total) * 100), color: "#10b981" },
+          { name: "Moderate Risk", value: Math.round((moderate / total) * 100), color: "#f59e0b" },
+          { name: "High Risk", value: Math.round((high / total) * 100), color: "#ef4444" },
+        ])
+      } else {
+        // No data - show empty chart message handled in UI
+        setWaterQualityData([])
+      }
 
-      // Generate health trends from reports
-      const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun"]
-      setHealthTrendsData(monthNames.map((month, i) => ({
-        month,
-        cases: healthData.filter(r => r.severity === 'high' || r.severity === 'critical').length + Math.floor(Math.random() * 5),
-        recovered: healthData.filter(r => r.status === 'resolved').length + Math.floor(Math.random() * 4),
-      })))
+      // Generate health trends from REAL reports only
+      if (healthData.length > 0 || symptomData.length > 0) {
+        // Group by month from actual createdAt timestamps
+        const monthCounts: Record<string, { cases: number; recovered: number }> = {}
+        const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
+        healthData.forEach(r => {
+          try {
+            const date = r.createdAt?.toDate ? r.createdAt.toDate() : (r.createdAt ? new Date(r.createdAt as any) : new Date())
+            const monthKey = monthNames[date.getMonth()]
+            if (!monthCounts[monthKey]) monthCounts[monthKey] = { cases: 0, recovered: 0 }
+            monthCounts[monthKey].cases += 1
+            if (r.status === 'resolved') monthCounts[monthKey].recovered += 1
+          } catch { }
+        })
+
+        const trendsData = Object.entries(monthCounts).map(([month, data]) => ({
+          month,
+          cases: data.cases,
+          recovered: data.recovered,
+        }))
+
+        setHealthTrendsData(trendsData.length > 0 ? trendsData : [])
+      } else {
+        setHealthTrendsData([])
+      }
 
     } catch (error) {
       console.error('Error loading dashboard data:', error)
@@ -325,14 +361,14 @@ export default function DashboardPage() {
                           <Badge
                             variant={
                               report.type === "Health Report"
-                                ? (report.severity === "high" || report.severity === "critical")
+                                ? ((report.severity as string) === "high" || (report.severity as string) === "critical")
                                   ? "destructive"
-                                  : report.severity === "moderate"
+                                  : ((report.severity as string) === "moderate" || (report.severity as string) === "medium")
                                     ? "default"
                                     : "secondary"
-                                : report.risk === "high"
+                                : (report as any).risk === "high"
                                   ? "destructive"
-                                  : report.risk === "moderate"
+                                  : (report as any).risk === "moderate" || (report as any).risk === "medium"
                                     ? "default"
                                     : "secondary"
                             }

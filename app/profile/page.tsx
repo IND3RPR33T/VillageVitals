@@ -9,34 +9,26 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
-import { 
-  User, 
-  Mail, 
-  Phone, 
-  Calendar, 
-  Shield, 
-  CheckCircle, 
-  AlertCircle, 
+import {
+  User,
+  Mail,
+  Phone,
+  Calendar,
+  Shield,
+  CheckCircle,
+  AlertCircle,
   Loader2,
   Edit,
   Save,
   X
 } from "lucide-react"
 import { useRouter } from "next/navigation"
-
-interface UserProfile {
-  id: number;
-  firstName: string;
-  lastName: string;
-  email: string;
-  phone: string;
-  role: string;
-  isVerified: boolean;
-  createdAt: string;
-}
+import { doc, updateDoc, serverTimestamp } from "firebase/firestore"
+import { db } from "@/lib/firebase"
+import { onAuthChange, getCurrentUserProfile, logOut, type UserProfile as FirebaseUserProfile } from "@/lib/firebase-auth"
 
 export default function ProfilePage() {
-  const [user, setUser] = useState<UserProfile | null>(null)
+  const [user, setUser] = useState<FirebaseUserProfile | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [success, setSuccess] = useState("")
@@ -50,44 +42,36 @@ export default function ProfilePage() {
     lastName: "",
     phone: "",
     role: "",
+    organization: "",
+    district: "",
+    state: "",
   })
 
   useEffect(() => {
-    fetchUserProfile()
-  }, [])
-
-  const fetchUserProfile = async () => {
-    try {
-      const response = await fetch("/api/auth/me", {
-        method: "GET",
-        credentials: "include",
-      })
-
-      if (response.status === 401) {
-        // User not authenticated, redirect to login
+    const unsubscribe = onAuthChange(async (firebaseUser) => {
+      if (!firebaseUser) {
         router.push("/login")
         return
       }
 
-      const data = await response.json()
-
-      if (response.ok) {
-        setUser(data.user)
+      const profile = await getCurrentUserProfile()
+      if (profile) {
+        setUser(profile)
         setEditData({
-          firstName: data.user.firstName,
-          lastName: data.user.lastName,
-          phone: data.user.phone,
-          role: data.user.role,
+          firstName: profile.firstName || profile.fullName?.split(' ')[0] || "",
+          lastName: profile.lastName || profile.fullName?.split(' ').slice(1).join(' ') || "",
+          phone: profile.phone || profile.phoneNumber || "",
+          role: profile.role || "",
+          organization: profile.organization || "",
+          district: profile.district || "",
+          state: profile.state || "",
         })
-      } else {
-        setError(data.error || "Failed to load profile")
       }
-    } catch (error) {
-      setError("Network error. Please try again.")
-    } finally {
       setLoading(false)
-    }
-  }
+    })
+
+    return () => unsubscribe()
+  }, [router])
 
   const handleSave = async () => {
     setIsSaving(true)
@@ -95,26 +79,27 @@ export default function ProfilePage() {
     setSuccess("")
 
     try {
-      const response = await fetch("/api/auth/update-profile", {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        credentials: "include",
-        body: JSON.stringify(editData),
+      if (!user?.uid) throw new Error("User not authenticated")
+
+      await updateDoc(doc(db, 'users', user.uid), {
+        firstName: editData.firstName,
+        lastName: editData.lastName,
+        fullName: `${editData.firstName} ${editData.lastName}`,
+        phone: editData.phone,
+        role: editData.role,
+        organization: editData.organization,
+        district: editData.district,
+        state: editData.state,
+        isProfileComplete: true,
+        updatedAt: serverTimestamp(),
       })
 
-      const data = await response.json()
-
-      if (response.ok) {
-        setUser({ ...user!, ...editData })
-        setIsEditing(false)
-        setSuccess("Profile updated successfully!")
-      } else {
-        setError(data.error || "Failed to update profile")
-      }
-    } catch (error) {
-      setError("Network error. Please try again.")
+      setUser({ ...user, ...editData as any })
+      setIsEditing(false)
+      setSuccess("Profile updated successfully!")
+    } catch (error: any) {
+      console.error("Update error:", error)
+      setError(error.message || "Failed to update profile")
     } finally {
       setIsSaving(false)
     }
@@ -122,26 +107,38 @@ export default function ProfilePage() {
 
   const handleCancel = () => {
     setIsEditing(false)
-    setEditData({
-      firstName: user?.firstName || "",
-      lastName: user?.lastName || "",
-      phone: user?.phone || "",
-      role: user?.role || "",
-    })
+    if (user) {
+      setEditData({
+        firstName: user.firstName || "",
+        lastName: user.lastName || "",
+        phone: user.phone || "",
+        role: user.role || "",
+        organization: user.organization || "",
+        district: user.district || "",
+        state: user.state || "",
+      })
+    }
     setError("")
     setSuccess("")
   }
 
   const handleLogout = async () => {
     try {
-      await fetch("/api/auth/logout", {
-        method: "POST",
-        credentials: "include",
-      })
+      await logOut()
       router.push("/login")
     } catch (error) {
       console.error("Logout error:", error)
       router.push("/login")
+    }
+  }
+
+  const formatRole = (role: string) => {
+    switch (role) {
+      case 'asha_worker': return 'ASHA Worker'
+      case 'health_official': return 'Health Official'
+      case 'field_worker': return 'Field Worker'
+      case 'admin': return 'Administrator'
+      default: return role.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())
     }
   }
 
@@ -173,6 +170,8 @@ export default function ProfilePage() {
       </div>
     )
   }
+
+  const displayPhone = user.phone || user.phoneNumber || ""
 
   return (
     <div className="min-h-screen bg-background">
@@ -268,11 +267,43 @@ export default function ProfilePage() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="community">Community Member</SelectItem>
-                        <SelectItem value="health-worker">Health Worker</SelectItem>
-                        <SelectItem value="admin">Admin</SelectItem>
+                        <SelectItem value="asha_worker">ASHA Worker</SelectItem>
+                        <SelectItem value="health_official">Health Official</SelectItem>
+                        <SelectItem value="field_worker">Field Worker</SelectItem>
+                        <SelectItem value="admin">Administrator</SelectItem>
                       </SelectContent>
                     </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-organization">Organization</Label>
+                    <Input
+                      id="edit-organization"
+                      value={editData.organization}
+                      onChange={(e) => setEditData({ ...editData, organization: e.target.value })}
+                      disabled={isSaving}
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="edit-district">District</Label>
+                      <Input
+                        id="edit-district"
+                        value={editData.district}
+                        onChange={(e) => setEditData({ ...editData, district: e.target.value })}
+                        disabled={isSaving}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="edit-state">State</Label>
+                      <Input
+                        id="edit-state"
+                        value={editData.state}
+                        onChange={(e) => setEditData({ ...editData, state: e.target.value })}
+                        disabled={isSaving}
+                      />
+                    </div>
                   </div>
 
                   <div className="flex gap-2 pt-4">
@@ -292,7 +323,7 @@ export default function ProfilePage() {
                   <div className="flex items-center gap-3">
                     <User className="h-5 w-5 text-muted-foreground" />
                     <div>
-                      <p className="font-medium">{user.firstName} {user.lastName}</p>
+                      <p className="font-medium">{user.firstName || user.fullName?.split(' ')[0]} {user.lastName || user.fullName?.split(' ').slice(1).join(' ')}</p>
                       <p className="text-sm text-muted-foreground">Full Name</p>
                     </div>
                   </div>
@@ -305,18 +336,20 @@ export default function ProfilePage() {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-3">
-                    <Phone className="h-5 w-5 text-muted-foreground" />
-                    <div>
-                      <p className="font-medium">{user.phone}</p>
-                      <p className="text-sm text-muted-foreground">Phone Number</p>
+                  {displayPhone && (
+                    <div className="flex items-center gap-3">
+                      <Phone className="h-5 w-5 text-muted-foreground" />
+                      <div>
+                        <p className="font-medium">{displayPhone}</p>
+                        <p className="text-sm text-muted-foreground">Phone Number</p>
+                      </div>
                     </div>
-                  </div>
+                  )}
 
                   <div className="flex items-center gap-3">
                     <Shield className="h-5 w-5 text-muted-foreground" />
                     <div>
-                      <p className="font-medium capitalize">{user.role.replace('-', ' ')}</p>
+                      <p className="font-medium">{formatRole(user.role)}</p>
                       <p className="text-sm text-muted-foreground">Role</p>
                     </div>
                   </div>
@@ -344,19 +377,20 @@ export default function ProfilePage() {
 
               <Separator />
 
-              <div className="flex items-center gap-3">
-                <Calendar className="h-5 w-5 text-muted-foreground" />
-                <div>
-                  <p className="font-medium">Member Since</p>
-                  <p className="text-sm text-muted-foreground">
-                    {new Date(user.createdAt).toLocaleDateString('en-US', {
-                      year: 'numeric',
-                      month: 'long',
-                      day: 'numeric'
-                    })}
-                  </p>
+              {user.createdAt && (
+                <div className="flex items-center gap-3">
+                  <Calendar className="h-5 w-5 text-muted-foreground" />
+                  <div>
+                    <p className="font-medium">Member Since</p>
+                    <p className="text-sm text-muted-foreground">
+                      {user.createdAt.toDate ?
+                        user.createdAt.toDate().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) :
+                        new Date(user.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+                      }
+                    </p>
+                  </div>
                 </div>
-              </div>
+              )}
 
               <Separator />
 
@@ -371,7 +405,7 @@ export default function ProfilePage() {
                       <li>Access administrative features</li>
                     </ul>
                   )}
-                  {user.role === 'health-worker' && (
+                  {user.role === 'health_official' && (
                     <ul className="list-disc list-inside space-y-1">
                       <li>Create and manage health reports</li>
                       <li>Monitor community health data</li>
@@ -379,7 +413,7 @@ export default function ProfilePage() {
                       <li>Access educational resources</li>
                     </ul>
                   )}
-                  {user.role === 'community' && (
+                  {(user.role === 'asha_worker' || user.role === 'field_worker') && (
                     <ul className="list-disc list-inside space-y-1">
                       <li>Submit health reports</li>
                       <li>Report water quality issues</li>
@@ -401,26 +435,26 @@ export default function ProfilePage() {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 onClick={() => router.push("/health-report")}
                 className="h-16 flex flex-col gap-2"
               >
                 <div className="text-lg">📊</div>
                 <span>Health Report</span>
               </Button>
-              
-              <Button 
-                variant="outline" 
+
+              <Button
+                variant="outline"
                 onClick={() => router.push("/water-quality")}
                 className="h-16 flex flex-col gap-2"
               >
                 <div className="text-lg">💧</div>
                 <span>Water Quality</span>
               </Button>
-              
-              <Button 
-                variant="outline" 
+
+              <Button
+                variant="outline"
                 onClick={() => router.push("/alerts")}
                 className="h-16 flex flex-col gap-2"
               >

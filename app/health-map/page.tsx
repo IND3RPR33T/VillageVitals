@@ -9,7 +9,14 @@ import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
 import { MapPin, Activity, Droplets, Hospital, Users, Phone, Navigation, Filter, Loader2 } from "lucide-react"
-import { getHealthReports, getWaterQualityTests, getSymptomReports, type HealthReport, type WaterQualityTest } from "@/lib/firestore-service"
+import {
+  getHealthReportsForRole,
+  getWaterQualityTestsForRole,
+  getSymptomReportsForRole,
+  type HealthReport,
+  type WaterQualityTest
+} from "@/lib/firestore-service"
+import { getCurrentUserRole } from "@/lib/role-service"
 
 // Static health centers (these don't change often)
 const healthCenters = [
@@ -38,6 +45,7 @@ export default function HealthMapPage() {
   const [showHealthCenters, setShowHealthCenters] = useState(true)
   const [severityFilter, setSeverityFilter] = useState("all")
   const [loading, setLoading] = useState(true)
+  const [isAdmin, setIsAdmin] = useState(false)
 
   // Real data from Firestore
   const [healthIncidents, setHealthIncidents] = useState<any[]>([])
@@ -49,11 +57,14 @@ export default function HealthMapPage() {
 
   const loadMapData = async () => {
     try {
-      const [healthReports, waterTests, symptomReports] = await Promise.all([
-        getHealthReports(50),
-        getWaterQualityTests(50),
-        getSymptomReports(50),
+      const [healthReports, waterTests, symptomReports, role] = await Promise.all([
+        getHealthReportsForRole(50),
+        getWaterQualityTestsForRole(50),
+        getSymptomReportsForRole(50),
+        getCurrentUserRole(),
       ])
+
+      setIsAdmin(role === 'admin')
 
       // Transform health reports to map markers
       const healthMarkers = [
@@ -71,7 +82,7 @@ export default function HealthMapPage() {
           date: formatDate(r.createdAt),
           population: 1000 + Math.floor(Math.random() * 2000),
         })),
-        ...symptomReports.map((r, i) => ({
+        ...(symptomReports as any[]).map((r: any, i: number) => ({
           id: r.id || `sr-${i}`,
           type: "health" as const,
           village: r.location?.address || r.patientInfo?.name || 'Symptom Report',

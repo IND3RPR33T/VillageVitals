@@ -1,12 +1,21 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import { AuthGuard } from "@/components/auth-guard"
 import { DashboardLayout } from "@/components/dashboard-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { AspectRatio } from "@/components/ui/aspect-ratio"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { BookOpen, PlayCircle, Info, Droplet, Flame, Filter, ShieldCheck, Package, AlertTriangle, Thermometer, Activity } from "lucide-react"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
+import { Badge } from "@/components/ui/badge"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { BookOpen, PlayCircle, Info, Droplet, Flame, Filter, ShieldCheck, Package, AlertTriangle, Thermometer, Activity, Plus, Trash2, Loader2, Megaphone } from "lucide-react"
+import { getAwarenessContent, addAwarenessContent, updateAwarenessContent, deleteAwarenessContent, type AwarenessContent } from "@/lib/firestore-service"
+import { getCurrentUserRole } from "@/lib/role-service"
 
 const guides = [
   {
@@ -76,7 +85,7 @@ const infographics = [
     id: 2,
     title_en: "Diseases: Their Treatments and Prevention",
     title_hi: "ध्यान देने योग्य लक्षण",
-  img: "/education/symptoms-local.png",
+    img: "/education/symptoms-local.png",
     steps_en: [
       "Start ORS for dehydration; give small frequent sips",
       "See a doctor; take antibiotics only if prescribed",
@@ -103,14 +112,192 @@ const infographics = [
 ]
 
 export default function EducationPage() {
+  const [isAdmin, setIsAdmin] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [awarenessContent, setAwarenessContent] = useState<AwarenessContent[]>([])
+  const [isCreateOpen, setIsCreateOpen] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+
+  const [newContent, setNewContent] = useState({
+    title: "",
+    content: "",
+    category: "general" as "prevention" | "treatment" | "hygiene" | "nutrition" | "emergency" | "general",
+    targetAudience: "general" as "general" | "health_workers" | "community_leaders" | "all",
+  })
+
+  useEffect(() => {
+    loadData()
+  }, [])
+
+  const loadData = async () => {
+    setLoading(true)
+    try {
+      const [content, role] = await Promise.all([
+        getAwarenessContent(50),
+        getCurrentUserRole(),
+      ])
+      setAwarenessContent(content)
+      setIsAdmin(role === 'admin')
+    } catch (error) {
+      console.error('Error loading awareness content:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleCreateContent = async () => {
+    if (!newContent.title || !newContent.content) return
+    setIsSaving(true)
+    try {
+      await addAwarenessContent(newContent)
+      setIsCreateOpen(false)
+      setNewContent({
+        title: "",
+        content: "",
+        category: "general",
+        targetAudience: "general",
+      })
+      loadData()
+    } catch (error) {
+      console.error('Error creating content:', error)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const handleDeleteContent = async (id: string) => {
+    if (!confirm("Are you sure you want to delete this awareness content?")) return
+    const success = await deleteAwarenessContent(id)
+    if (success) loadData()
+  }
+
   return (
     <AuthGuard>
       <DashboardLayout>
         <div className="space-y-8">
-          <div>
-            <h1 className="text-3xl font-bold">Educational Resources</h1>
-            <p className="text-muted-foreground">Infographics, videos, and guides to prevent water-borne diseases.</p>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <h1 className="text-3xl font-bold">Educational Resources</h1>
+              <p className="text-muted-foreground">Infographics, videos, and guides to prevent water-borne diseases.</p>
+            </div>
+            {isAdmin && (
+              <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+                <DialogTrigger asChild>
+                  <Button>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Awareness Content
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-lg">
+                  <DialogHeader>
+                    <DialogTitle>Create Awareness Content</DialogTitle>
+                    <DialogDescription>
+                      This content will be synced to the Flutter mobile app
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4 py-4">
+                    <div className="space-y-2">
+                      <Label>Title *</Label>
+                      <Input
+                        value={newContent.title}
+                        onChange={(e) => setNewContent({ ...newContent, title: e.target.value })}
+                        placeholder="Awareness content title"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Content *</Label>
+                      <Textarea
+                        value={newContent.content}
+                        onChange={(e) => setNewContent({ ...newContent, content: e.target.value })}
+                        placeholder="Educational content..."
+                        rows={4}
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Category</Label>
+                        <Select
+                          value={newContent.category}
+                          onValueChange={(v: any) => setNewContent({ ...newContent, category: v })}
+                        >
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="general">General</SelectItem>
+                            <SelectItem value="prevention">Prevention</SelectItem>
+                            <SelectItem value="treatment">Treatment</SelectItem>
+                            <SelectItem value="hygiene">Hygiene</SelectItem>
+                            <SelectItem value="nutrition">Nutrition</SelectItem>
+                            <SelectItem value="emergency">Emergency</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Target Audience</Label>
+                        <Select
+                          value={newContent.targetAudience}
+                          onValueChange={(v: any) => setNewContent({ ...newContent, targetAudience: v })}
+                        >
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">All Users</SelectItem>
+                            <SelectItem value="general">General Public</SelectItem>
+                            <SelectItem value="health_workers">Health Workers</SelectItem>
+                            <SelectItem value="community_leaders">Community Leaders</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setIsCreateOpen(false)}>Cancel</Button>
+                    <Button onClick={handleCreateContent} disabled={isSaving}>
+                      {isSaving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                      Create Content
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            )}
           </div>
+
+          {/* Awareness Content from Firebase (synced with App) */}
+          {awarenessContent.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Megaphone className="h-5 w-5" />
+                  Community Awareness ({awarenessContent.length})
+                </CardTitle>
+                <CardDescription>Content synced with the Flutter mobile app</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                  {awarenessContent.map((item) => (
+                    <div key={item.id} className="p-4 border rounded-lg">
+                      <div className="flex items-start justify-between mb-2">
+                        <h3 className="font-semibold">{item.title}</h3>
+                        {isAdmin && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-red-600"
+                            onClick={() => handleDeleteContent(item.id!)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
+                      <p className="text-sm text-muted-foreground mb-2 line-clamp-3">{item.content}</p>
+                      <div className="flex gap-2">
+                        <Badge variant="secondary" className="text-xs">{item.category}</Badge>
+                        <Badge variant="outline" className="text-xs">{item.targetAudience}</Badge>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           <Tabs defaultValue="en" className="w-full">
             <TabsList>

@@ -1,16 +1,29 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { AuthGuard } from "@/components/auth-guard"
 import { DashboardLayout } from "@/components/dashboard-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import {
+  Users, Activity, Droplets, AlertTriangle, FileText, Download, Plus, Trash2,
+  Eye, Loader2, CheckCircle, AlertCircle, BookOpen, Shield
+} from "lucide-react"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
 import {
   Dialog,
   DialogContent,
@@ -18,406 +31,363 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogFooter,
 } from "@/components/ui/dialog"
-import { Textarea } from "@/components/ui/textarea"
-import { Switch } from "@/components/ui/switch"
 import {
-  Users,
-  Download,
-  Filter,
-  Search,
-  Plus,
-  Edit,
-  Trash2,
-  AlertTriangle,
-  Activity,
-  Droplets,
-  FileText,
-  Send,
-  Eye,
-  Settings,
-  BarChart3,
-} from "lucide-react"
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from "recharts"
-
-// Mock data for admin dashboard
-const systemStats = {
-  totalUsers: 1247,
-  activeReports: 89,
-  pendingAlerts: 12,
-  dataIntegrity: 98.5,
-}
-
-const reportsData = [
-  {
-    state: "Assam",
-    district: "Kamrup",
-    village: "Kamakhya",
-    type: "Health",
-    cases: 5,
-    severity: "moderate",
-    date: "2024-01-15",
-    status: "pending",
-  },
-  {
-    state: "Assam",
-    district: "Jorhat",
-    village: "Majuli",
-    type: "Water",
-    turbidity: 15.2,
-    risk: "moderate",
-    date: "2024-01-14",
-    status: "reviewed",
-  },
-  {
-    state: "Manipur",
-    district: "Imphal East",
-    village: "Porompat",
-    type: "Health",
-    cases: 3,
-    severity: "low",
-    date: "2024-01-13",
-    status: "resolved",
-  },
-  {
-    state: "Mizoram",
-    district: "Aizawl",
-    village: "Bethlehem",
-    type: "Water",
-    turbidity: 8.5,
-    risk: "low",
-    date: "2024-01-12",
-    status: "approved",
-  },
-]
-
-const usersData = [
-  {
-    id: 1,
-    name: "Dr. Priya Sharma",
-    email: "priya@example.com",
-    role: "Health Worker",
-    village: "Kamakhya",
-    status: "active",
-    lastLogin: "2024-01-15",
-  },
-  {
-    id: 2,
-    name: "Ram Kumar",
-    email: "ram@example.com",
-    role: "Community Member",
-    village: "Majuli",
-    status: "active",
-    lastLogin: "2024-01-14",
-  },
-  {
-    id: 3,
-    name: "Dr. Singh",
-    email: "singh@example.com",
-    role: "Admin",
-    village: "Guwahati",
-    status: "active",
-    lastLogin: "2024-01-15",
-  },
-  {
-    id: 4,
-    name: "Maya Devi",
-    email: "maya@example.com",
-    role: "Health Worker",
-    village: "Dibrugarh",
-    status: "inactive",
-    lastLogin: "2024-01-10",
-  },
-]
-
-const alertsData = [
-  {
-    id: 1,
-    title: "Water Contamination Alert",
-    message: "High turbidity detected in Dibrugarh village water source",
-    severity: "high",
-    villages: ["Dibrugarh", "Tinsukia"],
-    status: "active",
-    created: "2024-01-15",
-  },
-  {
-    id: 2,
-    title: "Seasonal Flu Outbreak",
-    message: "Increased flu cases reported in multiple villages",
-    severity: "moderate",
-    villages: ["Kamakhya", "Majuli"],
-    status: "pending",
-    created: "2024-01-14",
-  },
-]
-
-const chartData = [
-  { month: "Jan", health: 45, water: 23, resolved: 52 },
-  { month: "Feb", health: 38, water: 19, resolved: 41 },
-  { month: "Mar", health: 52, water: 31, resolved: 67 },
-  { month: "Apr", health: 29, water: 15, resolved: 38 },
-  { month: "May", health: 41, water: 27, resolved: 55 },
-  { month: "Jun", health: 33, water: 18, resolved: 44 },
-]
+  getAllUsers,
+  getHealthReports,
+  getWaterQualityTests,
+  getSymptomReports,
+  getEmergencyAlerts,
+  getAlerts,
+  deleteDocument,
+  addAwarenessContent,
+  getAwarenessContent,
+  deleteAwarenessContent,
+  type HealthReport,
+  type WaterQualityTest,
+  type Alert as AlertType,
+  type AwarenessContent,
+} from "@/lib/firestore-service"
 
 export default function AdminPage() {
-  const [stateFilter, setStateFilter] = useState("all")
-  const [districtFilter, setDistrictFilter] = useState("all")
-  const [statusFilter, setStatusFilter] = useState("all")
-  const [searchTerm, setSearchTerm] = useState("")
-  const [selectedAlert, setSelectedAlert] = useState<any>(null)
-  const [isCreateAlertOpen, setIsCreateAlertOpen] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState("")
+  const [success, setSuccess] = useState("")
 
-  const handleExportData = (format: "excel" | "pdf") => {
-    // Simulate data export
-    console.log(`Exporting data as ${format}`)
-    alert(`Data exported as ${format.toUpperCase()}`)
+  // Data states
+  const [users, setUsers] = useState<any[]>([])
+  const [healthReports, setHealthReports] = useState<HealthReport[]>([])
+  const [waterTests, setWaterTests] = useState<WaterQualityTest[]>([])
+  const [symptomReports, setSymptomReports] = useState<any[]>([])
+  const [emergencyAlerts, setEmergencyAlerts] = useState<any[]>([])
+  const [systemAlerts, setSystemAlerts] = useState<AlertType[]>([])
+  const [awarenessContent, setAwarenessContent] = useState<AwarenessContent[]>([])
+
+  // Dialog states
+  const [isAddAwarenessOpen, setIsAddAwarenessOpen] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+  const [awarenessForm, setAwarenessForm] = useState({
+    title: "",
+    description: "",
+    content: "",
+    category: "health_tips",
+    imageUrl: "",
+    isFeatured: false,
+  })
+
+  useEffect(() => {
+    loadAllData()
+  }, [])
+
+  const loadAllData = async () => {
+    try {
+      setLoading(true)
+      const [
+        usersData,
+        healthData,
+        waterData,
+        symptomData,
+        emergencyData,
+        alertsData,
+        awarenessData,
+      ] = await Promise.all([
+        getAllUsers(),
+        getHealthReports(100),
+        getWaterQualityTests(100),
+        getSymptomReports(100),
+        getEmergencyAlerts(100),
+        getAlerts(100),
+        getAwarenessContent(100),
+      ])
+
+      setUsers(usersData)
+      setHealthReports(healthData)
+      setWaterTests(waterData)
+      setSymptomReports(symptomData)
+      setEmergencyAlerts(emergencyData)
+      setSystemAlerts(alertsData)
+      setAwarenessContent(awarenessData)
+    } catch (error) {
+      console.error("Error loading admin data:", error)
+      setError("Failed to load admin data")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const formatDate = (timestamp: any) => {
+    if (!timestamp) return 'N/A'
+    try {
+      const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp)
+      return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    } catch {
+      return 'N/A'
+    }
+  }
+
+  const formatRole = (role: string) => {
+    switch (role) {
+      case 'asha_worker': return 'ASHA Worker'
+      case 'health_official': return 'Health Official'
+      case 'field_worker': return 'Field Worker'
+      case 'admin': return 'Administrator'
+      default: return role?.replace('_', ' ') || 'Unknown'
+    }
+  }
+
+  const handleDelete = async (collectionName: string, docId: string, dataType: string) => {
+    if (!confirm(`Are you sure you want to delete this ${dataType}?`)) return
+
+    try {
+      const success = await deleteDocument(collectionName, docId)
+      if (success) {
+        setSuccess(`${dataType} deleted successfully`)
+        loadAllData() // Reload data
+      } else {
+        setError(`Failed to delete ${dataType}`)
+      }
+    } catch (error) {
+      setError(`Error deleting ${dataType}`)
+    }
+  }
+
+  const handleAddAwareness = async () => {
+    if (!awarenessForm.title || !awarenessForm.description || !awarenessForm.content) {
+      setError("Please fill in all required fields")
+      return
+    }
+
+    setIsSaving(true)
+    try {
+      await addAwarenessContent(awarenessForm)
+      setSuccess("Awareness content added successfully! It will now appear in the app.")
+      setIsAddAwarenessOpen(false)
+      setAwarenessForm({
+        title: "",
+        description: "",
+        content: "",
+        category: "health_tips",
+        imageUrl: "",
+        isFeatured: false,
+      })
+      loadAllData()
+    } catch (error) {
+      setError("Failed to add awareness content")
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  // Export to CSV
+  const exportToCSV = (data: any[], filename: string, headers: string[]) => {
+    const csvRows = []
+    csvRows.push(headers.join(','))
+
+    data.forEach(item => {
+      const values = headers.map(header => {
+        const value = item[header] ?? ''
+        // Escape commas and quotes
+        const escaped = String(value).replace(/"/g, '""')
+        return `"${escaped}"`
+      })
+      csvRows.push(values.join(','))
+    })
+
+    const csvString = csvRows.join('\n')
+    const blob = new Blob([csvString], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `${filename}_${new Date().toISOString().split('T')[0]}.csv`
+    link.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const exportUsers = () => {
+    const headers = ['uid', 'email', 'firstName', 'lastName', 'fullName', 'phone', 'phoneNumber', 'role', 'isVerified']
+    exportToCSV(users, 'users', headers)
+    setSuccess("Users exported to CSV")
+  }
+
+  const exportHealthReports = () => {
+    const headers = ['reportId', 'reporterName', 'reporterEmail', 'villageName', 'state', 'symptoms', 'severity', 'numberOfCases', 'status', 'description']
+    const data = healthReports.map(r => ({ ...r, symptoms: r.symptoms?.join('; ') || '' }))
+    exportToCSV(data, 'health_reports', headers)
+    setSuccess("Health reports exported to CSV")
+  }
+
+  const exportWaterTests = () => {
+    const headers = ['testId', 'testerName', 'testerEmail', 'location', 'sourceType', 'coliform', 'turbidity', 'bod', 'cod', 'nitrate', 'ammonia', 'riskLevel', 'status']
+    const data = waterTests.map(t => ({
+      ...t,
+      coliform: t.measurements?.coliform,
+      turbidity: t.measurements?.turbidity,
+      bod: t.measurements?.bod,
+      cod: t.measurements?.cod,
+      nitrate: t.measurements?.nitrate,
+      ammonia: t.measurements?.ammonia,
+      riskLevel: t.riskAssessment?.level,
+    }))
+    exportToCSV(data, 'water_quality_tests', headers)
+    setSuccess("Water quality tests exported to CSV")
+  }
+
+  const exportSymptomReports = () => {
+    const headers = ['id', 'symptoms', 'severity', 'description', 'location', 'createdAt']
+    const data = symptomReports.map(r => ({
+      ...r,
+      symptoms: r.symptoms?.join?.('; ') || r.symptoms || '',
+      createdAt: formatDate(r.createdAt),
+    }))
+    exportToCSV(data, 'symptom_reports', headers)
+    setSuccess("Symptom reports exported to CSV")
+  }
+
+  const exportAllData = () => {
+    exportUsers()
+    setTimeout(() => exportHealthReports(), 500)
+    setTimeout(() => exportWaterTests(), 1000)
+    setTimeout(() => exportSymptomReports(), 1500)
+  }
+
+  if (loading) {
+    return (
+      <AuthGuard allowedRoles={['admin']}>
+        <DashboardLayout>
+          <div className="flex items-center justify-center min-h-[60vh]">
+            <Loader2 className="h-8 w-8 animate-spin" />
+          </div>
+        </DashboardLayout>
+      </AuthGuard>
+    )
   }
 
   return (
-    <AuthGuard requiredRole="admin">
+    <AuthGuard allowedRoles={['admin']}>
       <DashboardLayout>
-        <div className="space-y-8">
+        <div className="space-y-6">
           {/* Header */}
-          <div className="animate-fade-in">
-            <h1 className="text-3xl font-bold text-balance">Admin & Officials Dashboard</h1>
-            <p className="text-muted-foreground mt-2">
-              Comprehensive system management and data oversight for health officials
-            </p>
+          <div className="flex justify-between items-center">
+            <div>
+              <h1 className="text-3xl font-bold flex items-center gap-2">
+                <Shield className="h-8 w-8" />
+                Admin Dashboard
+              </h1>
+              <p className="text-muted-foreground">
+                Manage users, reports, and content
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <Button onClick={loadAllData} variant="outline">
+                Refresh Data
+              </Button>
+              <Button onClick={exportAllData}>
+                <Download className="h-4 w-4 mr-2" />
+                Export All
+              </Button>
+            </div>
           </div>
 
-          {/* System Overview */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <Card className="animate-slide-up">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Users</CardTitle>
-                <Users className="h-4 w-4 text-muted-foreground" />
+          {/* Messages */}
+          {error && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+          {success && (
+            <Alert className="border-green-200 bg-green-50 text-green-800">
+              <CheckCircle className="h-4 w-4" />
+              <AlertDescription>{success}</AlertDescription>
+            </Alert>
+          )}
+
+          {/* Stats Overview */}
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium flex items-center gap-2">
+                  <Users className="h-4 w-4" /> Users
+                </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{systemStats.totalUsers}</div>
-                <p className="text-xs text-muted-foreground">
-                  <span className="text-green-600">+12%</span> from last month
-                </p>
+                <div className="text-2xl font-bold">{users.length}</div>
               </CardContent>
             </Card>
-
-            <Card className="animate-slide-up">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Active Reports</CardTitle>
-                <FileText className="h-4 w-4 text-muted-foreground" />
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium flex items-center gap-2">
+                  <Activity className="h-4 w-4" /> Health Reports
+                </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{systemStats.activeReports}</div>
-                <p className="text-xs text-muted-foreground">Awaiting review</p>
+                <div className="text-2xl font-bold">{healthReports.length}</div>
               </CardContent>
             </Card>
-
-            <Card className="animate-slide-up">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Pending Alerts</CardTitle>
-                <AlertTriangle className="h-4 w-4 text-muted-foreground" />
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium flex items-center gap-2">
+                  <Droplets className="h-4 w-4" /> Water Tests
+                </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{systemStats.pendingAlerts}</div>
-                <p className="text-xs text-muted-foreground">
-                  <span className="text-red-600">3 high priority</span>
-                </p>
+                <div className="text-2xl font-bold">{waterTests.length}</div>
               </CardContent>
             </Card>
-
-            <Card className="animate-slide-up">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Data Integrity</CardTitle>
-                <BarChart3 className="h-4 w-4 text-muted-foreground" />
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium flex items-center gap-2">
+                  <FileText className="h-4 w-4" /> Symptoms
+                </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{systemStats.dataIntegrity}%</div>
-                <p className="text-xs text-muted-foreground">System health excellent</p>
+                <div className="text-2xl font-bold">{symptomReports.length}</div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4" /> Emergencies
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{emergencyAlerts.length}</div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium flex items-center gap-2">
+                  <BookOpen className="h-4 w-4" /> Awareness
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{awarenessContent.length}</div>
               </CardContent>
             </Card>
           </div>
 
-          {/* Main Dashboard Tabs */}
-          <Tabs defaultValue="reports" className="space-y-6">
-            <TabsList className="grid w-full grid-cols-5">
-              <TabsTrigger value="reports">Reports</TabsTrigger>
+          {/* Main Tabs */}
+          <Tabs defaultValue="users" className="space-y-4">
+            <TabsList className="grid grid-cols-6 w-full max-w-4xl">
               <TabsTrigger value="users">Users</TabsTrigger>
-              <TabsTrigger value="alerts">Alerts</TabsTrigger>
-              <TabsTrigger value="analytics">Analytics</TabsTrigger>
-              <TabsTrigger value="settings">Settings</TabsTrigger>
+              <TabsTrigger value="health">Health</TabsTrigger>
+              <TabsTrigger value="water">Water</TabsTrigger>
+              <TabsTrigger value="symptoms">Symptoms</TabsTrigger>
+              <TabsTrigger value="emergency">Emergency</TabsTrigger>
+              <TabsTrigger value="awareness">Awareness</TabsTrigger>
             </TabsList>
 
-            {/* Reports Management */}
-            <TabsContent value="reports" className="space-y-6">
-              {/* Filters */}
-              <Card className="animate-slide-up">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Filter className="h-5 w-5" />
-                    Data Filters & Export
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-4">
-                    <div className="relative">
-                      <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        placeholder="Search reports..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="pl-10"
-                      />
-                    </div>
-                    <Select value={stateFilter} onValueChange={setStateFilter}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Filter by state" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All States</SelectItem>
-                        <SelectItem value="assam">Assam</SelectItem>
-                        <SelectItem value="manipur">Manipur</SelectItem>
-                        <SelectItem value="mizoram">Mizoram</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <Select value={districtFilter} onValueChange={setDistrictFilter}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Filter by district" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All Districts</SelectItem>
-                        <SelectItem value="kamrup">Kamrup</SelectItem>
-                        <SelectItem value="jorhat">Jorhat</SelectItem>
-                        <SelectItem value="imphal-east">Imphal East</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <Select value={statusFilter} onValueChange={setStatusFilter}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Filter by status" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All Status</SelectItem>
-                        <SelectItem value="pending">Pending</SelectItem>
-                        <SelectItem value="reviewed">Reviewed</SelectItem>
-                        <SelectItem value="resolved">Resolved</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <div className="flex gap-2">
-                      <Button variant="outline" onClick={() => handleExportData("excel")}>
-                        <Download className="h-4 w-4 mr-2" />
-                        Excel
-                      </Button>
-                      <Button variant="outline" onClick={() => handleExportData("pdf")}>
-                        <Download className="h-4 w-4 mr-2" />
-                        PDF
-                      </Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Reports Table */}
-              <Card className="animate-slide-up">
-                <CardHeader>
-                  <CardTitle>All Reports</CardTitle>
-                  <CardDescription>Comprehensive view of all health and water quality reports</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Location</TableHead>
-                        <TableHead>Type</TableHead>
-                        <TableHead>Details</TableHead>
-                        <TableHead>Severity/Risk</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Date</TableHead>
-                        <TableHead>Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {reportsData.map((report, index) => (
-                        <TableRow key={index}>
-                          <TableCell>
-                            <div>
-                              <div className="font-medium">{report.village}</div>
-                              <div className="text-sm text-muted-foreground">
-                                {report.district}, {report.state}
-                              </div>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="outline" className="flex items-center gap-1 w-fit">
-                              {report.type === "Health" ? (
-                                <Activity className="h-3 w-3" />
-                              ) : (
-                                <Droplets className="h-3 w-3" />
-                              )}
-                              {report.type}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            {report.type === "Health" ? (
-                              <span>{report.cases} cases</span>
-                            ) : (
-                              <span>{report.turbidity} NTU</span>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            <Badge
-                              variant={
-                                report.severity === "high" || report.risk === "high"
-                                  ? "destructive"
-                                  : report.severity === "moderate" || report.risk === "moderate"
-                                    ? "default"
-                                    : "secondary"
-                              }
-                            >
-                              {report.severity || report.risk}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <Badge
-                              variant={
-                                report.status === "pending"
-                                  ? "default"
-                                  : report.status === "reviewed"
-                                    ? "secondary"
-                                    : "outline"
-                              }
-                            >
-                              {report.status}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>{report.date}</TableCell>
-                          <TableCell>
-                            <div className="flex gap-2">
-                              <Button size="sm" variant="outline">
-                                <Eye className="h-4 w-4" />
-                              </Button>
-                              <Button size="sm" variant="outline">
-                                <Edit className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            {/* User Management */}
-            <TabsContent value="users" className="space-y-6">
-              <Card className="animate-slide-up">
+            {/* Users Tab */}
+            <TabsContent value="users">
+              <Card>
                 <CardHeader className="flex flex-row items-center justify-between">
                   <div>
-                    <CardTitle>User Management</CardTitle>
-                    <CardDescription>Manage user accounts, roles, and permissions</CardDescription>
+                    <CardTitle>All Users</CardTitle>
+                    <CardDescription>Manage registered users</CardDescription>
                   </div>
-                  <Button>
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add User
+                  <Button onClick={exportUsers} variant="outline" size="sm">
+                    <Download className="h-4 w-4 mr-2" /> Export CSV
                   </Button>
                 </CardHeader>
                 <CardContent>
@@ -426,35 +396,30 @@ export default function AdminPage() {
                       <TableRow>
                         <TableHead>Name</TableHead>
                         <TableHead>Email</TableHead>
+                        <TableHead>Phone</TableHead>
                         <TableHead>Role</TableHead>
-                        <TableHead>Village</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Last Login</TableHead>
-                        <TableHead>Actions</TableHead>
+                        <TableHead>Verified</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {usersData.map((user) => (
+                      {users.map((user) => (
                         <TableRow key={user.id}>
-                          <TableCell className="font-medium">{user.name}</TableCell>
+                          <TableCell className="font-medium">
+                            {user.firstName || user.fullName?.split(' ')[0] || 'N/A'} {user.lastName || ''}
+                          </TableCell>
                           <TableCell>{user.email}</TableCell>
+                          <TableCell>{user.phone || user.phoneNumber || 'N/A'}</TableCell>
                           <TableCell>
-                            <Badge variant="outline">{user.role}</Badge>
+                            <Badge variant={user.role === 'admin' ? 'destructive' : 'secondary'}>
+                              {formatRole(user.role)}
+                            </Badge>
                           </TableCell>
-                          <TableCell>{user.village}</TableCell>
                           <TableCell>
-                            <Badge variant={user.status === "active" ? "secondary" : "outline"}>{user.status}</Badge>
-                          </TableCell>
-                          <TableCell>{user.lastLogin}</TableCell>
-                          <TableCell>
-                            <div className="flex gap-2">
-                              <Button size="sm" variant="outline">
-                                <Edit className="h-4 w-4" />
-                              </Button>
-                              <Button size="sm" variant="outline">
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
+                            {user.isVerified ? (
+                              <CheckCircle className="h-4 w-4 text-green-500" />
+                            ) : (
+                              <AlertCircle className="h-4 w-4 text-yellow-500" />
+                            )}
                           </TableCell>
                         </TableRow>
                       ))}
@@ -464,223 +429,380 @@ export default function AdminPage() {
               </Card>
             </TabsContent>
 
-            {/* Alert Management */}
-            <TabsContent value="alerts" className="space-y-6">
-              <Card className="animate-slide-up">
+            {/* Health Reports Tab */}
+            <TabsContent value="health">
+              <Card>
                 <CardHeader className="flex flex-row items-center justify-between">
                   <div>
-                    <CardTitle>Alert Management</CardTitle>
-                    <CardDescription>Create, manage, and broadcast health alerts</CardDescription>
+                    <CardTitle>Health Reports</CardTitle>
+                    <CardDescription>All health reports from web and app</CardDescription>
                   </div>
-                  <Dialog open={isCreateAlertOpen} onOpenChange={setIsCreateAlertOpen}>
-                    <DialogTrigger asChild>
-                      <Button>
-                        <Plus className="h-4 w-4 mr-2" />
-                        Create Alert
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent className="max-w-2xl">
-                      <DialogHeader>
-                        <DialogTitle>Create New Alert</DialogTitle>
-                        <DialogDescription>
-                          Broadcast an alert to selected villages and health workers
-                        </DialogDescription>
-                      </DialogHeader>
-                      <div className="space-y-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="alert-title">Alert Title</Label>
-                          <Input id="alert-title" placeholder="Enter alert title" />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="alert-message">Message</Label>
-                          <Textarea id="alert-message" placeholder="Enter alert message" rows={4} />
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="space-y-2">
-                            <Label htmlFor="alert-severity">Severity</Label>
-                            <Select>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select severity" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="low">Low</SelectItem>
-                                <SelectItem value="moderate">Moderate</SelectItem>
-                                <SelectItem value="high">High</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div className="space-y-2">
-                            <Label htmlFor="alert-villages">Target Villages</Label>
-                            <Select>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select villages" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="all">All Villages</SelectItem>
-                                <SelectItem value="kamakhya">Kamakhya</SelectItem>
-                                <SelectItem value="majuli">Majuli</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        </div>
-                        <div className="flex justify-end gap-2">
-                          <Button variant="outline" onClick={() => setIsCreateAlertOpen(false)}>
-                            Cancel
-                          </Button>
-                          <Button onClick={() => setIsCreateAlertOpen(false)}>
-                            <Send className="h-4 w-4 mr-2" />
-                            Send Alert
-                          </Button>
-                        </div>
-                      </div>
-                    </DialogContent>
-                  </Dialog>
+                  <Button onClick={exportHealthReports} variant="outline" size="sm">
+                    <Download className="h-4 w-4 mr-2" /> Export CSV
+                  </Button>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-4">
-                    {alertsData.map((alert) => (
-                      <div key={alert.id} className="border rounded-lg p-4">
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-2">
-                              <h4 className="font-medium">{alert.title}</h4>
-                              <Badge
-                                variant={
-                                  alert.severity === "high"
-                                    ? "destructive"
-                                    : alert.severity === "moderate"
-                                      ? "default"
-                                      : "secondary"
-                                }
-                              >
-                                {alert.severity}
-                              </Badge>
-                              <Badge variant={alert.status === "active" ? "secondary" : "outline"}>
-                                {alert.status}
-                              </Badge>
-                            </div>
-                            <p className="text-sm text-muted-foreground mb-2">{alert.message}</p>
-                            <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                              <span>Villages: {alert.villages.join(", ")}</span>
-                              <span>Created: {alert.created}</span>
-                            </div>
-                          </div>
-                          <div className="flex gap-2">
-                            <Button size="sm" variant="outline">
-                              <Edit className="h-4 w-4" />
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>ID</TableHead>
+                        <TableHead>Reporter</TableHead>
+                        <TableHead>Location</TableHead>
+                        <TableHead>Symptoms</TableHead>
+                        <TableHead>Cases</TableHead>
+                        <TableHead>Severity</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Date</TableHead>
+                        <TableHead>Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {healthReports.map((report) => (
+                        <TableRow key={report.id}>
+                          <TableCell className="font-mono text-xs">{report.reportId}</TableCell>
+                          <TableCell>{report.reporterName}</TableCell>
+                          <TableCell>{report.villageName}, {report.state}</TableCell>
+                          <TableCell className="max-w-[150px] truncate">{report.symptoms?.join(', ')}</TableCell>
+                          <TableCell>{report.numberOfCases}</TableCell>
+                          <TableCell>
+                            <Badge variant={report.severity === 'critical' || report.severity === 'high' ? 'destructive' : 'secondary'}>
+                              {report.severity}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>{report.status}</TableCell>
+                          <TableCell>{formatDate(report.createdAt)}</TableCell>
+                          <TableCell>
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={() => handleDelete('health_reports', report.id!, 'report')}
+                            >
+                              <Trash2 className="h-3 w-3" />
                             </Button>
-                            <Button size="sm" variant="outline">
-                              <Send className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
                 </CardContent>
               </Card>
             </TabsContent>
 
-            {/* Analytics */}
-            <TabsContent value="analytics" className="space-y-6">
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <Card className="animate-slide-up">
-                  <CardHeader>
-                    <CardTitle>Monthly Report Trends</CardTitle>
-                    <CardDescription>Health and water quality reports over time</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <ResponsiveContainer width="100%" height={300}>
-                      <BarChart data={chartData}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="month" />
-                        <YAxis />
-                        <Tooltip />
-                        <Bar dataKey="health" fill="hsl(var(--chart-1))" name="Health Reports" />
-                        <Bar dataKey="water" fill="hsl(var(--chart-2))" name="Water Reports" />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </CardContent>
-                </Card>
-
-                <Card className="animate-slide-up">
-                  <CardHeader>
-                    <CardTitle>Resolution Rate</CardTitle>
-                    <CardDescription>Monthly resolution trends</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <ResponsiveContainer width="100%" height={300}>
-                      <LineChart data={chartData}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="month" />
-                        <YAxis />
-                        <Tooltip />
-                        <Line
-                          type="monotone"
-                          dataKey="resolved"
-                          stroke="hsl(var(--chart-3))"
-                          strokeWidth={3}
-                          name="Resolved Cases"
-                        />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </CardContent>
-                </Card>
-              </div>
+            {/* Water Tests Tab */}
+            <TabsContent value="water">
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <div>
+                    <CardTitle>Water Quality Tests</CardTitle>
+                    <CardDescription>All water quality test results</CardDescription>
+                  </div>
+                  <Button onClick={exportWaterTests} variant="outline" size="sm">
+                    <Download className="h-4 w-4 mr-2" /> Export CSV
+                  </Button>
+                </CardHeader>
+                <CardContent>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>ID</TableHead>
+                        <TableHead>Tester</TableHead>
+                        <TableHead>Location</TableHead>
+                        <TableHead>Source</TableHead>
+                        <TableHead>Risk Level</TableHead>
+                        <TableHead>Turbidity</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Date</TableHead>
+                        <TableHead>Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {waterTests.map((test) => (
+                        <TableRow key={test.id}>
+                          <TableCell className="font-mono text-xs">{test.testId}</TableCell>
+                          <TableCell>{test.testerName}</TableCell>
+                          <TableCell>{test.location}</TableCell>
+                          <TableCell>{test.sourceType}</TableCell>
+                          <TableCell>
+                            <Badge variant={test.riskAssessment?.level === 'high' ? 'destructive' : 'secondary'}>
+                              {test.riskAssessment?.level}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>{test.measurements?.turbidity} NTU</TableCell>
+                          <TableCell>{test.status}</TableCell>
+                          <TableCell>{formatDate(test.createdAt)}</TableCell>
+                          <TableCell>
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={() => handleDelete('water_quality_tests', test.id!, 'test')}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
             </TabsContent>
 
-            {/* System Settings */}
-            <TabsContent value="settings" className="space-y-6">
-              <Card className="animate-slide-up">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Settings className="h-5 w-5" />
-                    System Configuration
-                  </CardTitle>
-                  <CardDescription>Manage system-wide settings and preferences</CardDescription>
+            {/* Symptom Reports Tab */}
+            <TabsContent value="symptoms">
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <div>
+                    <CardTitle>Symptom Reports (Flutter App)</CardTitle>
+                    <CardDescription>Reports submitted from mobile app</CardDescription>
+                  </div>
+                  <Button onClick={exportSymptomReports} variant="outline" size="sm">
+                    <Download className="h-4 w-4 mr-2" /> Export CSV
+                  </Button>
                 </CardHeader>
-                <CardContent className="space-y-6">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-4">
-                      <h4 className="font-medium">Notification Settings</h4>
-                      <div className="space-y-3">
-                        <div className="flex items-center justify-between">
-                          <Label htmlFor="email-alerts">Email Alerts</Label>
-                          <Switch id="email-alerts" defaultChecked />
+                <CardContent>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>ID</TableHead>
+                        <TableHead>Symptoms</TableHead>
+                        <TableHead>Severity</TableHead>
+                        <TableHead>Description</TableHead>
+                        <TableHead>Date</TableHead>
+                        <TableHead>Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {symptomReports.map((report) => (
+                        <TableRow key={report.id}>
+                          <TableCell className="font-mono text-xs">{report.id?.substring(0, 8)}</TableCell>
+                          <TableCell className="max-w-[200px] truncate">
+                            {Array.isArray(report.symptoms) ? report.symptoms.join(', ') : report.symptoms}
+                          </TableCell>
+                          <TableCell>
+                            <Badge>{report.severity || 'N/A'}</Badge>
+                          </TableCell>
+                          <TableCell className="max-w-[200px] truncate">{report.description}</TableCell>
+                          <TableCell>{formatDate(report.createdAt)}</TableCell>
+                          <TableCell>
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={() => handleDelete('symptom_reports', report.id!, 'report')}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            {/* Emergency Alerts Tab */}
+            <TabsContent value="emergency">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Emergency Alerts (Flutter App)</CardTitle>
+                  <CardDescription>Emergency alerts from mobile app</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>ID</TableHead>
+                        <TableHead>Description</TableHead>
+                        <TableHead>Location</TableHead>
+                        <TableHead>Audio</TableHead>
+                        <TableHead>Image</TableHead>
+                        <TableHead>Date</TableHead>
+                        <TableHead>Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {emergencyAlerts.map((alert) => (
+                        <TableRow key={alert.id}>
+                          <TableCell className="font-mono text-xs">{alert.id?.substring(0, 8)}</TableCell>
+                          <TableCell className="max-w-[200px] truncate">{alert.description}</TableCell>
+                          <TableCell>
+                            {alert.latitude && alert.longitude ? (
+                              <a
+                                href={`https://maps.google.com/?q=${alert.latitude},${alert.longitude}`}
+                                target="_blank"
+                                className="text-blue-600 hover:underline"
+                              >
+                                View Map
+                              </a>
+                            ) : 'N/A'}
+                          </TableCell>
+                          <TableCell>
+                            {alert.audioUrl ? (
+                              <a href={alert.audioUrl} target="_blank" className="text-blue-600 hover:underline">Listen</a>
+                            ) : 'N/A'}
+                          </TableCell>
+                          <TableCell>
+                            {alert.imageUrl ? (
+                              <a href={alert.imageUrl} target="_blank" className="text-blue-600 hover:underline">View</a>
+                            ) : 'N/A'}
+                          </TableCell>
+                          <TableCell>{formatDate(alert.createdAt)}</TableCell>
+                          <TableCell>
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={() => handleDelete('emergency_alerts', alert.id!, 'alert')}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            {/* Awareness Tab */}
+            <TabsContent value="awareness">
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <div>
+                    <CardTitle>Awareness Content</CardTitle>
+                    <CardDescription>Health tips and articles shown in the app</CardDescription>
+                  </div>
+                  <Dialog open={isAddAwarenessOpen} onOpenChange={setIsAddAwarenessOpen}>
+                    <DialogTrigger asChild>
+                      <Button>
+                        <Plus className="h-4 w-4 mr-2" /> Add Content
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="max-w-2xl">
+                      <DialogHeader>
+                        <DialogTitle>Add Awareness Content</DialogTitle>
+                        <DialogDescription>
+                          Create new health awareness content that will appear in the mobile app
+                        </DialogDescription>
+                      </DialogHeader>
+                      <div className="space-y-4 py-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="title">Title *</Label>
+                          <Input
+                            id="title"
+                            value={awarenessForm.title}
+                            onChange={(e) => setAwarenessForm({ ...awarenessForm, title: e.target.value })}
+                            placeholder="e.g., Preventing Waterborne Diseases"
+                          />
                         </div>
-                        <div className="flex items-center justify-between">
-                          <Label htmlFor="sms-alerts">SMS Alerts</Label>
-                          <Switch id="sms-alerts" defaultChecked />
+                        <div className="space-y-2">
+                          <Label htmlFor="category">Category *</Label>
+                          <Select
+                            value={awarenessForm.category}
+                            onValueChange={(value) => setAwarenessForm({ ...awarenessForm, category: value })}
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="health_tips">Health Tips</SelectItem>
+                              <SelectItem value="disease_prevention">Disease Prevention</SelectItem>
+                              <SelectItem value="water_safety">Water Safety</SelectItem>
+                              <SelectItem value="emergency_prep">Emergency Preparedness</SelectItem>
+                              <SelectItem value="nutrition">Nutrition</SelectItem>
+                              <SelectItem value="general">General</SelectItem>
+                            </SelectContent>
+                          </Select>
                         </div>
-                        <div className="flex items-center justify-between">
-                          <Label htmlFor="push-notifications">Push Notifications</Label>
-                          <Switch id="push-notifications" />
+                        <div className="space-y-2">
+                          <Label htmlFor="description">Short Description *</Label>
+                          <Input
+                            id="description"
+                            value={awarenessForm.description}
+                            onChange={(e) => setAwarenessForm({ ...awarenessForm, description: e.target.value })}
+                            placeholder="Brief summary for list view"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="content">Full Content *</Label>
+                          <Textarea
+                            id="content"
+                            value={awarenessForm.content}
+                            onChange={(e) => setAwarenessForm({ ...awarenessForm, content: e.target.value })}
+                            placeholder="Full article content..."
+                            rows={6}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="imageUrl">Image URL (optional)</Label>
+                          <Input
+                            id="imageUrl"
+                            value={awarenessForm.imageUrl}
+                            onChange={(e) => setAwarenessForm({ ...awarenessForm, imageUrl: e.target.value })}
+                            placeholder="https://example.com/image.jpg"
+                          />
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            id="featured"
+                            checked={awarenessForm.isFeatured}
+                            onChange={(e) => setAwarenessForm({ ...awarenessForm, isFeatured: e.target.checked })}
+                          />
+                          <Label htmlFor="featured">Featured (show at top)</Label>
                         </div>
                       </div>
-                    </div>
-
-                    <div className="space-y-4">
-                      <h4 className="font-medium">Data Management</h4>
-                      <div className="space-y-3">
-                        <div className="flex items-center justify-between">
-                          <Label htmlFor="auto-backup">Automatic Backup</Label>
-                          <Switch id="auto-backup" defaultChecked />
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <Label htmlFor="data-retention">Extended Data Retention</Label>
-                          <Switch id="data-retention" defaultChecked />
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <Label htmlFor="analytics">Advanced Analytics</Label>
-                          <Switch id="analytics" />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="pt-4 border-t">
-                    <Button>Save Configuration</Button>
-                  </div>
+                      <DialogFooter>
+                        <Button variant="outline" onClick={() => setIsAddAwarenessOpen(false)}>
+                          Cancel
+                        </Button>
+                        <Button onClick={handleAddAwareness} disabled={isSaving}>
+                          {isSaving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                          Add Content
+                        </Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
+                </CardHeader>
+                <CardContent>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Title</TableHead>
+                        <TableHead>Category</TableHead>
+                        <TableHead>Description</TableHead>
+                        <TableHead>Featured</TableHead>
+                        <TableHead>Date</TableHead>
+                        <TableHead>Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {awarenessContent.map((content) => (
+                        <TableRow key={content.id}>
+                          <TableCell className="font-medium">{content.title}</TableCell>
+                          <TableCell>
+                            <Badge variant="secondary">{content.category?.replace('_', ' ')}</Badge>
+                          </TableCell>
+                          <TableCell className="max-w-[200px] truncate">{content.description}</TableCell>
+                          <TableCell>
+                            {content.isFeatured ? (
+                              <CheckCircle className="h-4 w-4 text-green-500" />
+                            ) : '-'}
+                          </TableCell>
+                          <TableCell>{formatDate(content.createdAt)}</TableCell>
+                          <TableCell>
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={() => handleDelete('awareness_content', content.id!, 'content')}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
                 </CardContent>
               </Card>
             </TabsContent>

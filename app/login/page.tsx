@@ -38,7 +38,7 @@ export default function LoginPage() {
     phone: "",
     password: "",
     confirmPassword: "",
-    role: "" as 'community' | 'health-worker' | 'admin' | '',
+    role: "" as 'asha_worker' | 'health_official' | 'field_worker' | 'admin' | '',
   })
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -97,7 +97,7 @@ export default function LoginPage() {
         firstName: registerData.firstName,
         lastName: registerData.lastName,
         phone: registerData.phone,
-        role: registerData.role as 'community' | 'health-worker' | 'admin',
+        role: registerData.role as 'asha_worker' | 'health_official' | 'field_worker' | 'admin',
       })
 
       setSuccess("Account created successfully! Redirecting to dashboard...")
@@ -116,11 +116,21 @@ export default function LoginPage() {
     setError("")
 
     try {
-      await signInWithGoogle()
-      setSuccess("Login successful! Redirecting...")
-      setTimeout(() => {
-        router.push("/dashboard")
-      }, 1000)
+      const result = await signInWithGoogle()
+
+      if (result.isNewUser) {
+        // New user - redirect to profile completion
+        setSuccess("Welcome! Please complete your profile...")
+        setTimeout(() => {
+          router.push("/profile-complete")
+        }, 1000)
+      } else {
+        // Existing user - redirect to dashboard
+        setSuccess("Login successful! Redirecting...")
+        setTimeout(() => {
+          router.push("/dashboard")
+        }, 1000)
+      }
     } catch (error: any) {
       setError(error.message || "Google sign-in failed")
     } finally {
@@ -310,9 +320,10 @@ export default function LoginPage() {
                           <SelectValue placeholder="Select your role" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="community">Community Member</SelectItem>
-                          <SelectItem value="health-worker">Health Worker</SelectItem>
-                          <SelectItem value="admin">Admin</SelectItem>
+                          <SelectItem value="asha_worker">ASHA Worker</SelectItem>
+                          <SelectItem value="health_official">Health Official</SelectItem>
+                          <SelectItem value="field_worker">Field Worker</SelectItem>
+                          <SelectItem value="admin">Administrator</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>

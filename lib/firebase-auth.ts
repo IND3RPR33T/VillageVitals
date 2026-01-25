@@ -26,9 +26,16 @@ export interface UserProfile {
     email: string;
     firstName: string;
     lastName: string;
+    fullName?: string;
     phone?: string;
-    role: 'community' | 'health-worker' | 'admin';
+    phoneNumber?: string;
+    organization?: string;
+    district?: string;
+    state?: string;
+    // Roles match Flutter app: asha_worker, health_official, field_worker, admin
+    role: 'asha_worker' | 'health_official' | 'field_worker' | 'admin';
     isVerified: boolean;
+    isProfileComplete?: boolean;
     createdAt: any;
     updatedAt: any;
 }
@@ -40,7 +47,7 @@ export async function signUp(data: {
     firstName: string;
     lastName: string;
     phone?: string;
-    role: 'community' | 'health-worker' | 'admin';
+    role: 'asha_worker' | 'health_official' | 'field_worker' | 'admin';
 }): Promise<UserProfile> {
     try {
         // Create Firebase Auth user
@@ -104,7 +111,7 @@ export async function signIn(data: {
             email: user.email || '',
             firstName: user.displayName?.split(' ')[0] || '',
             lastName: user.displayName?.split(' ').slice(1).join(' ') || '',
-            role: 'community',
+            role: 'field_worker',
             isVerified: user.emailVerified,
             createdAt: null,
             updatedAt: null,
@@ -116,7 +123,7 @@ export async function signIn(data: {
 }
 
 // Sign in with Google
-export async function signInWithGoogle(): Promise<UserProfile> {
+export async function signInWithGoogle(): Promise<{ profile: UserProfile; isNewUser: boolean }> {
     try {
         const provider = new GoogleAuthProvider();
         const result = await signInWithPopup(auth, provider);
@@ -126,7 +133,19 @@ export async function signInWithGoogle(): Promise<UserProfile> {
         const userDoc = await getDoc(doc(db, 'users', user.uid));
 
         if (userDoc.exists()) {
-            return userDoc.data() as UserProfile;
+            const data = userDoc.data();
+            const profile = data as UserProfile;
+            // Check if profile is complete:
+            // - Has isProfileComplete flag set to true, OR
+            // - Has fullName (from Flutter app), OR
+            // - Was created from Flutter app (has phoneNumber field)
+            const isComplete = data.isProfileComplete === true ||
+                !!data.fullName ||
+                !!data.phoneNumber;
+            return {
+                profile,
+                isNewUser: !isComplete
+            };
         }
 
         // Create new profile for Google user
@@ -136,15 +155,24 @@ export async function signInWithGoogle(): Promise<UserProfile> {
             email: user.email || '',
             firstName: names[0] || '',
             lastName: names.slice(1).join(' ') || '',
+            fullName: user.displayName || '',
             phone: user.phoneNumber || '',
-            role: 'community',
+            role: 'field_worker', // Default role - matches Flutter app
             isVerified: true,
+            isProfileComplete: false,
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
         };
 
-        await setDoc(doc(db, 'users', user.uid), userProfile);
-        return userProfile;
+        await setDoc(doc(db, 'users', user.uid), {
+            ...userProfile,
+            isProfileComplete: false, // Mark as incomplete until they fill profile
+        });
+
+        return {
+            profile: userProfile,
+            isNewUser: true  // New user, needs to complete profile
+        };
     } catch (error: any) {
         console.error('Google sign in error:', error);
         throw new Error(getFirebaseErrorMessage(error.code));
