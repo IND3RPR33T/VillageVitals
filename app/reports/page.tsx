@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { AuthGuard } from "@/components/auth-guard"
+import { RBACAuthGuard } from "@/components/rbac-auth-guard"
 import { DashboardLayout } from "@/components/dashboard-layout"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Activity, Droplets, Search, Filter, Download, Eye, Calendar, MapPin, Users, Loader2, Trash2 } from "lucide-react"
 import Link from "next/link"
 import {
@@ -19,6 +20,7 @@ import {
   type WaterQualityTest
 } from "@/lib/firestore-service"
 import { getCurrentUserRole } from "@/lib/role-service"
+import { normalizeRole } from "@/lib/rbac/role-utils"
 
 export default function ReportsPage() {
   const [searchTerm, setSearchTerm] = useState("")
@@ -28,6 +30,9 @@ export default function ReportsPage() {
   const [healthReports, setHealthReports] = useState<HealthReport[]>([])
   const [waterReports, setWaterReports] = useState<WaterQualityTest[]>([])
   const [isAdmin, setIsAdmin] = useState(false)
+  const [selectedReport, setSelectedReport] = useState<HealthReport | WaterQualityTest | null>(null)
+  const [isDetailOpen, setIsDetailOpen] = useState(false)
+  const [selectedReportType, setSelectedReportType] = useState<'health' | 'water'>('health')
 
   useEffect(() => {
     loadData()
@@ -43,7 +48,10 @@ export default function ReportsPage() {
       ])
       setHealthReports(health)
       setWaterReports(water)
-      setIsAdmin(role === 'admin')
+      
+      // Normalize role for proper admin check
+      const normalizedRole = normalizeRole(role)
+      setIsAdmin(normalizedRole === 'ADMIN')
     } catch (error) {
       console.error("Error loading data:", error)
     } finally {
@@ -102,6 +110,22 @@ export default function ReportsPage() {
     if (success) loadData()
   }
 
+  const viewDetails = (report: HealthReport | WaterQualityTest, type: 'health' | 'water') => {
+    setSelectedReport(report)
+    setSelectedReportType(type)
+    setIsDetailOpen(true)
+  }
+
+  const formatDateDetailed = (timestamp: any) => {
+    if (!timestamp) return 'N/A'
+    try {
+      const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp)
+      return date.toLocaleString()
+    } catch {
+      return 'N/A'
+    }
+  }
+
   // Export to CSV
   const exportData = (data: any[], filename: string) => {
     if (data.length === 0) return
@@ -144,7 +168,7 @@ export default function ReportsPage() {
   })
 
   return (
-    <AuthGuard>
+    <RBACAuthGuard requiredModule="HEALTH_REPORTS">
       <DashboardLayout>
         <div className="space-y-8">
           {/* Header */}
@@ -285,7 +309,11 @@ export default function ReportsPage() {
                           </div>
 
                           <div className="flex gap-2">
-                            <Button variant="outline" size="sm">
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              onClick={() => viewDetails(report, 'health')}
+                            >
                               <Eye className="h-4 w-4 mr-2" />
                               View Details
                             </Button>
@@ -362,7 +390,11 @@ export default function ReportsPage() {
                           </div>
 
                           <div className="flex gap-2">
-                            <Button variant="outline" size="sm">
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              onClick={() => viewDetails(report, 'water')}
+                            >
                               <Eye className="h-4 w-4 mr-2" />
                               View Details
                             </Button>
@@ -386,6 +418,175 @@ export default function ReportsPage() {
           )}
         </div>
       </DashboardLayout>
-    </AuthGuard>
+      
+      {/* Detail View Dialog */}
+      <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              {selectedReportType === 'health' ? 'Health Report Details' : 'Water Quality Test Details'}
+            </DialogTitle>
+          </DialogHeader>
+          
+          {selectedReport && selectedReportType === 'health' && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <h3 className="font-semibold text-sm text-muted-foreground">BASIC INFORMATION</h3>
+                  <div className="mt-2 space-y-2">
+                    <p><span className="font-medium">Village:</span> {(selectedReport as HealthReport).villageName}</p>
+                    <p><span className="font-medium">State:</span> {(selectedReport as HealthReport).state}</p>
+                    <p><span className="font-medium">Reporter:</span> {(selectedReport as HealthReport).reporterName}</p>
+                    <p><span className="font-medium">Email:</span> {(selectedReport as HealthReport).reporterEmail}</p>
+                    <p><span className="font-medium">Created:</span> {formatDateDetailed((selectedReport as HealthReport).createdAt)}</p>
+                  </div>
+                </div>
+                
+                <div>
+                  <h3 className="font-semibold text-sm text-muted-foreground">CASE DETAILS</h3>
+                  <div className="mt-2 space-y-2">
+                    <p><span className="font-medium">Number of Cases:</span> {(selectedReport as HealthReport).numberOfCases}</p>
+                    <p>
+                      <span className="font-medium">Severity:</span>
+                      <Badge className="ml-2" variant={getSeverityColor((selectedReport as HealthReport).severity) as any}>
+                        {(selectedReport as HealthReport).severity}
+                      </Badge>
+                    </p>
+                    <p>
+                      <span className="font-medium">Status:</span>
+                      <Badge className="ml-2" variant={getStatusColor((selectedReport as HealthReport).status) as any}>
+                        {(selectedReport as HealthReport).status}
+                      </Badge>
+                    </p>
+                  </div>
+                </div>
+              </div>
+              
+              <div>
+                <h3 className="font-semibold text-sm text-muted-foreground">SYMPTOMS</h3>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {(selectedReport as HealthReport).symptoms.map((symptom, index) => (
+                    <Badge key={index} variant="outline">{symptom}</Badge>
+                  ))}
+                </div>
+              </div>
+              
+              {(selectedReport as HealthReport).description && (
+                <div>
+                  <h3 className="font-semibold text-sm text-muted-foreground">DESCRIPTION</h3>
+                  <p className="mt-2 text-sm">{(selectedReport as HealthReport).description}</p>
+                </div>
+              )}
+              
+              {(selectedReport as HealthReport).location && (
+                <div>
+                  <h3 className="font-semibold text-sm text-muted-foreground">LOCATION</h3>
+                  <div className="mt-2 space-y-1">
+                    {(selectedReport as HealthReport).location.address && (
+                      <p><span className="font-medium">Address:</span> {(selectedReport as HealthReport).location.address}</p>
+                    )}
+                    {(selectedReport as HealthReport).location.latitude && (selectedReport as HealthReport).location.longitude && (
+                      <p>
+                        <span className="font-medium">Coordinates:</span> 
+                        {(selectedReport as HealthReport).location.latitude}, {(selectedReport as HealthReport).location.longitude}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}              
+              {(selectedReport as HealthReport).images && (selectedReport as HealthReport).images!.length > 0 && (
+                <div>
+                  <h3 className=\"font-semibold text-sm text-muted-foreground\">IMAGES</h3>
+                  <div className=\"mt-2 grid grid-cols-2 md:grid-cols-3 gap-2\">
+                    {(selectedReport as HealthReport).images!.map((imageUrl, index) => (
+                      <img
+                        key={index}
+                        src={imageUrl}
+                        alt={`Report image ${index + 1}`}
+                        className=\"w-full h-24 object-cover rounded border cursor-pointer hover:opacity-80\"
+                        onClick={() => window.open(imageUrl, '_blank')}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}            </div>
+          )}
+          
+          {selectedReport && selectedReportType === 'water' && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <h3 className="font-semibold text-sm text-muted-foreground">TEST INFORMATION</h3>
+                  <div className="mt-2 space-y-2">
+                    <p><span className="font-medium">Test Type:</span> {(selectedReport as WaterQualityTest).testType}</p>
+                    <p><span className="font-medium">Tester:</span> {(selectedReport as WaterQualityTest).testerName}</p>
+                    <p><span className="font-medium">Email:</span> {(selectedReport as WaterQualityTest).testerEmail}</p>
+                    <p><span className="font-medium">Date:</span> {formatDateDetailed((selectedReport as WaterQualityTest).createdAt)}</p>
+                  </div>
+                </div>
+                
+                <div>
+                  <h3 className="font-semibold text-sm text-muted-foreground">WATER SOURCE</h3>
+                  <div className="mt-2 space-y-2">
+                    <p><span className="font-medium">Source:</span> {(selectedReport as WaterQualityTest).waterSource?.sourceName || 'N/A'}</p>
+                    <p><span className="font-medium">Type:</span> {(selectedReport as WaterQualityTest).waterSource?.sourceType || 'N/A'}</p>
+                    {(selectedReport as WaterQualityTest).waterSource?.location?.address && (
+                      <p><span className="font-medium">Location:</span> {(selectedReport as WaterQualityTest).waterSource.location.address}</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+              
+              {(selectedReport as WaterQualityTest).testResults && (
+                <div>
+                  <h3 className="font-semibold text-sm text-muted-foreground">TEST RESULTS</h3>
+                  <div className="mt-2 grid grid-cols-2 md:grid-cols-3 gap-4">
+                    {Object.entries((selectedReport as WaterQualityTest).testResults).map(([key, value]) => (
+                      <div key={key} className="bg-gray-50 p-2 rounded">
+                        <p className="text-xs text-muted-foreground uppercase">{key.replace('_', ' ')}</p>
+                        <p className="font-medium">{value?.toString() || 'N/A'}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
+              {(selectedReport as WaterQualityTest).riskAssessment && (
+                <div>
+                  <h3 className="font-semibold text-sm text-muted-foreground">RISK ASSESSMENT</h3>
+                  <div className="mt-2 space-y-2">
+                    <p>
+                      <span className="font-medium">Risk Level:</span>
+                      <Badge className="ml-2" variant={getSeverityColor((selectedReport as WaterQualityTest).riskAssessment.level) as any}>
+                        {(selectedReport as WaterQualityTest).riskAssessment.level}
+                      </Badge>
+                    </p>
+                    {(selectedReport as WaterQualityTest).riskAssessment.score && (
+                      <p><span className="font-medium">Risk Score:</span> {(selectedReport as WaterQualityTest).riskAssessment.score}/100</p>
+                    )}
+                    {(selectedReport as WaterQualityTest).riskAssessment.recommendations && (
+                      <div>
+                        <p className="font-medium">Recommendations:</p>
+                        <ul className="ml-4 list-disc text-sm">
+                          {(selectedReport as WaterQualityTest).riskAssessment.recommendations.map((rec, index) => (
+                            <li key={index}>{rec}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsDetailOpen(false)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </RBACAuthGuard>
   )
 }

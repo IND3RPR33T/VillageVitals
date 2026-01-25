@@ -3,7 +3,7 @@
 import type React from "react"
 
 import { useState } from "react"
-import { AuthGuard } from "@/components/auth-guard"
+import { RBACAuthGuard } from "@/components/rbac-auth-guard"
 import { DashboardLayout } from "@/components/dashboard-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -19,6 +19,7 @@ import { format } from "date-fns"
 import { CalendarIcon, Upload, X, Plus, Activity, AlertTriangle, CheckCircle } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { addHealthReport } from "@/lib/firestore-service"
+import { uploadImage, compressImage, validateImageFile } from "@/lib/cloudinary-service"
 
 const commonSymptoms = [
   "Fever",
@@ -69,9 +70,29 @@ export default function HealthReportPage() {
     setSelectedSymptoms((prev) => prev.filter((s) => s !== symptom))
   }
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || [])
-    setUploadedImages((prev) => [...prev, ...files].slice(0, 5)) // Max 5 images
+    
+    // Validate each file
+    const validFiles: File[] = []
+    for (const file of files) {
+      const validation = validateImageFile(file)
+      if (validation.isValid) {
+        validFiles.push(file)
+      } else {
+        alert(`Invalid file ${file.name}: ${validation.error}`)
+      }
+    }
+    
+    // Add valid files (max 5 total)
+    const currentCount = uploadedImages.length
+    const newFiles = validFiles.slice(0, Math.max(0, 5 - currentCount))
+    
+    if (newFiles.length < validFiles.length) {
+      alert('Maximum 5 images allowed')
+    }
+    
+    setUploadedImages(prev => [...prev, ...newFiles])
   }
 
   const removeImage = (index: number) => {
@@ -96,17 +117,50 @@ export default function HealthReportPage() {
     setSubmitError(null)
 
     try {
-      // Save to Firebase Firestore
-      const id = await addHealthReport({
-        villageName,
+      // Upload images to Cloudinary first
+      let imageUrls: string[] = []
+      if (uploadedImages.length > 0) {
+        console.log('📤 Uploading', uploadedImages.length, 'images to Cloudinary...')
+        setImageUploading(new Array(uploadedImages.length).fill(true))
+        
+        for (let i = 0; i < uploadedImages.length; i++) {
+          try {
+            const compressed = await compressImage(uploadedImages[i], 0.8)
+            const uploadResult = await uploadImage(compressed, {
+              folder: 'health_reports',
+              quality: 'auto',
+              format: 'auto'
+            })
+            imageUrls.push(uploadResult.secure_url)
+            console.log(`✅ Image ${i + 1} uploaded:`, uploadResult.secure_url)
+            
+            // Update upload status
+            setImageUploading(prev => {
+              const newStatus = [...prev]
+              newStatus[i] = false
+              return newStatus
+            })
+          } catch (error) {
+            console.error(`❌ Failed to upload image ${i + 1}:`, error)
+            // Continue with other images
+          }
+        }
+      }
+
+      // Save to Firebase Firestore with image URLs
+      const reportData = {
+        villageName: villageName.trim(),
         state: selectedState,
         symptoms: selectedSymptoms,
         severity: getSeverity(),
         numberOfCases: parseInt(numberOfCases) || 1,
-        description,
-        contactInfo,
-        incidentDate: date,
-      })
+        description: description.trim(),
+        contactInfo: contactInfo.trim(),
+        images: imageUrls, // Add uploaded image URLs
+      }
+      
+      console.log('💾 Saving health report with', imageUrls.length, 'images')
+      const id = await addHealthReport(reportData)
 
       setReportId(id)
       setIsSubmitting(false)
@@ -120,7 +174,7 @@ export default function HealthReportPage() {
 
   if (isSubmitted) {
     return (
-      <AuthGuard>
+      <RBACAuthGuard requiredModule="HEALTH_REPORTS">
         <DashboardLayout>
           <div className="max-w-2xl mx-auto">
             <Card className="text-center animate-slide-up">
@@ -143,12 +197,12 @@ export default function HealthReportPage() {
             </Card>
           </div>
         </DashboardLayout>
-      </AuthGuard>
+      </RBACAuthGuard>
     )
   }
 
   return (
-    <AuthGuard>
+    <RBACAuthGuard requiredModule="HEALTH_REPORTS">
       <DashboardLayout>
         <div className="max-w-4xl mx-auto space-y-8">
           {/* Header */}
@@ -401,6 +455,6 @@ export default function HealthReportPage() {
           </form>
         </div>
       </DashboardLayout>
-    </AuthGuard>
+    </RBACAuthGuard>
   )
 }

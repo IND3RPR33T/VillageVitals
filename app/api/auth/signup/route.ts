@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
     // Hash password
     const passwordHash = hashPassword(password);
 
-    // Create user (but not verified yet)
+    // Create user and auto-verify (bypass OTP)
     const userData = {
       firstName,
       lastName,
@@ -63,25 +63,21 @@ export async function POST(request: NextRequest) {
       phone,
       passwordHash,
       role,
+      isVerified: true, // Auto-verify user
+      isActive: true,
+      verifiedAt: new Date(),
     };
 
     const newUser = await createUser(userData);
-
-    // Generate and send OTP
-    const otpCode = generateOTP();
-    await createOTP(email, otpCode);
-
-    const emailResult = await sendOTPEmail(email, otpCode, firstName);
     
-    if (!emailResult.success) {
-      console.error('Failed to send OTP email:', emailResult.error);
-      // Don't fail the signup, just log the error
-    }
+    // Skip OTP generation and email sending
+    console.log('User registered and auto-verified:', email);
 
     return NextResponse.json({
-      message: 'User registered successfully. Please check your email for OTP verification.',
+      message: 'User registered successfully and is ready to use the app!',
       userId: newUser.id,
       email: newUser.email,
+      isVerified: true,
     });
 
   } catch (error) {

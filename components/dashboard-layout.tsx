@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import {
@@ -27,15 +27,19 @@ import { Logo } from "@/components/logo"
 import { UserProfile } from "@/components/user-profile"
 import { useTheme } from "next-themes"
 import { onAuthChange, getCurrentUserProfile } from "@/lib/firebase-auth"
+import { UserRole, Module } from "@/lib/rbac/types"
+import { hasReadAccess, hasWriteAccess } from "@/lib/rbac/permissions"
+import { normalizeRole } from "@/lib/rbac/role-utils"
 
-const navigation = [
-  { name: "Dashboard", href: "/dashboard", icon: Home },
-  { name: "Health Reports", href: "/health-report", icon: Activity },
-  { name: "Water Quality", href: "/water-quality", icon: Droplets },
-  { name: "Health Map", href: "/health-map", icon: MapPin },
-  { name: "Alerts", href: "/alerts", icon: AlertTriangle },
-  { name: "Education", href: "/education", icon: BookOpen },
-  { name: "Reports", href: "/reports", icon: FileText },
+// Navigation items with module mapping for RBAC
+const navigationConfig = [
+  { name: "Dashboard", href: "/dashboard", icon: Home, module: "DASHBOARD" as Module },
+  { name: "Health Reports", href: "/health-report", icon: Activity, module: "HEALTH_REPORTS" as Module },
+  { name: "Water Quality", href: "/water-quality", icon: Droplets, module: "WATER_QUALITY" as Module },
+  { name: "Health Map", href: "/health-map", icon: MapPin, module: "HEALTH_MAP" as Module },
+  { name: "Alerts", href: "/alerts", icon: AlertTriangle, module: "ALERTS" as Module },
+  { name: "Education", href: "/education", icon: BookOpen, module: "EDUCATION" as Module },
+  { name: "Reports", href: "/reports", icon: FileText, module: "REPORTS" as Module },
 ]
 
 type NavItem = {
@@ -53,11 +57,24 @@ const getSettingsNavigation = (theme: string | undefined, setTheme: (theme: stri
   { name: "Sign Out", href: "/login", icon: LogOut },
 ]
 
-function Sidebar({ mobile, onClose, isAdmin }: { mobile?: boolean; onClose?: () => void; isAdmin?: boolean }) {
+interface SidebarProps {
+  mobile?: boolean;
+  onClose?: () => void;
+  userRole: UserRole;
+}
+
+function Sidebar({ mobile, onClose, userRole }: SidebarProps) {
   const pathname = usePathname()
   const { theme, setTheme } = useTheme()
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const settingsNavigation = getSettingsNavigation(theme, setTheme)
+  
+  // Filter navigation based on role permissions
+  const visibleNavigation = useMemo(() => {
+    return navigationConfig.filter(item => hasReadAccess(userRole, item.module))
+  }, [userRole])
+
+  const canAccessAdmin = userRole === 'ADMIN'
 
   return (
     <div className="flex flex-col h-full">
@@ -66,9 +83,9 @@ function Sidebar({ mobile, onClose, isAdmin }: { mobile?: boolean; onClose?: () 
         <Logo />
       </div>
 
-      {/* Main Navigation */}
+      {/* Main Navigation - filtered by RBAC */}
       <nav className="flex-1 space-y-1 p-2">
-        {navigation.map((item) => {
+        {visibleNavigation.map((item) => {
           const isActive = pathname === item.href
           return (
             <Link
@@ -86,8 +103,8 @@ function Sidebar({ mobile, onClose, isAdmin }: { mobile?: boolean; onClose?: () 
           )
         })}
 
-        {/* Admin Link - only visible for admins */}
-        {isAdmin && (
+        {/* Admin Link - only visible for ADMIN role */}
+        {canAccessAdmin && (
           <Link
             href="/admin"
             className={cn(
@@ -175,16 +192,20 @@ interface DashboardLayoutProps {
 
 export function DashboardLayout({ children }: DashboardLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [isAdmin, setIsAdmin] = useState(false)
+  const [userRole, setUserRole] = useState<UserRole>('USER')
   const { theme, setTheme } = useTheme()
 
   useEffect(() => {
     const unsubscribe = onAuthChange(async (user) => {
       if (user) {
         const profile = await getCurrentUserProfile()
-        setIsAdmin(profile?.role === 'admin')
+        if (profile?.role) {
+          setUserRole(normalizeRole(profile.role))
+        } else {
+          setUserRole('USER')
+        }
       } else {
-        setIsAdmin(false)
+        setUserRole('USER')
       }
     })
     return () => unsubscribe()
@@ -195,7 +216,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       {/* Desktop Sidebar */}
       <div className="hidden lg:fixed lg:inset-y-0 lg:flex lg:w-64 lg:flex-col">
         <div className="flex flex-col flex-grow border-r bg-card">
-          <Sidebar isAdmin={isAdmin} />
+          <Sidebar userRole={userRole} />
         </div>
       </div>
 
@@ -211,7 +232,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           </Button>
         </SheetTrigger>
         <SheetContent side="left" className="p-0 w-64">
-          <Sidebar mobile onClose={() => setSidebarOpen(false)} isAdmin={isAdmin} />
+          <Sidebar mobile onClose={() => setSidebarOpen(false)} userRole={userRole} />
         </SheetContent>
       </Sheet>
 

@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { AuthGuard } from "@/components/auth-guard"
+import { RBACAuthGuard } from "@/components/rbac-auth-guard"
 import { DashboardLayout } from "@/components/dashboard-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -17,6 +17,7 @@ import {
   type WaterQualityTest
 } from "@/lib/firestore-service"
 import { getCurrentUserRole } from "@/lib/role-service"
+import { normalizeRole } from "@/lib/rbac/role-utils"
 
 // Static health centers (these don't change often)
 const healthCenters = [
@@ -64,7 +65,9 @@ export default function HealthMapPage() {
         getCurrentUserRole(),
       ])
 
-      setIsAdmin(role === 'admin')
+      // Normalize role for admin check
+      const normalizedRole = normalizeRole(role)
+      setIsAdmin(normalizedRole === 'ADMIN')
 
       // Transform health reports to map markers
       const healthMarkers = [
@@ -193,18 +196,18 @@ export default function HealthMapPage() {
 
   if (loading) {
     return (
-      <AuthGuard>
+      <RBACAuthGuard requiredModule="HEALTH_MAPS">
         <DashboardLayout>
           <div className="flex items-center justify-center min-h-[60vh]">
             <Loader2 className="h-8 w-8 animate-spin" />
           </div>
         </DashboardLayout>
-      </AuthGuard>
+      </RBACAuthGuard>
     )
   }
 
   return (
-    <AuthGuard>
+    <RBACAuthGuard requiredModule="HEALTH_REPORTS">
       <DashboardLayout>
         <div className="space-y-6">
           {/* Header */}
@@ -561,6 +564,6 @@ export default function HealthMapPage() {
           </div>
         </div>
       </DashboardLayout>
-    </AuthGuard>
+    </RBACAuthGuard>
   )
 }

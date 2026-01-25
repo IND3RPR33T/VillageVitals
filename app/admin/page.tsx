@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { AuthGuard } from "@/components/auth-guard"
+import { RBACAuthGuard } from "@/components/rbac-auth-guard"
 import { DashboardLayout } from "@/components/dashboard-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -253,18 +253,18 @@ export default function AdminPage() {
 
   if (loading) {
     return (
-      <AuthGuard allowedRoles={['admin']}>
+      <RBACAuthGuard allowedRoles={['ADMIN']} requiredModule="ADMIN_PANEL">
         <DashboardLayout>
           <div className="flex items-center justify-center min-h-[60vh]">
             <Loader2 className="h-8 w-8 animate-spin" />
           </div>
         </DashboardLayout>
-      </AuthGuard>
+      </RBACAuthGuard>
     )
   }
 
   return (
-    <AuthGuard allowedRoles={['admin']}>
+    <RBACAuthGuard allowedRoles={['ADMIN']} requiredModule="ADMIN_PANEL">
       <DashboardLayout>
         <div className="space-y-6">
           {/* Header */}
@@ -809,6 +809,6 @@ export default function AdminPage() {
           </Tabs>
         </div>
       </DashboardLayout>
-    </AuthGuard>
+    </RBACAuthGuard>
   )
 }

@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { AuthGuard } from "@/components/auth-guard"
+import { RBACAuthGuard } from "@/components/rbac-auth-guard"
 import { DashboardLayout } from "@/components/dashboard-layout"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -26,6 +26,8 @@ import {
   deleteDocument,
   type Alert as AlertType
 } from "@/lib/firestore-service"
+import { hasWriteAccess } from "@/lib/rbac/permissions"
+import { normalizeRole } from "@/lib/rbac/role-utils"
 import { getCurrentUserRole } from "@/lib/role-service"
 
 export default function AlertsPage() {
@@ -34,7 +36,8 @@ export default function AlertsPage() {
   const [statusFilter, setStatusFilter] = useState("all")
   const [loading, setLoading] = useState(true)
   const [alerts, setAlerts] = useState<AlertType[]>([])
-  const [isAdmin, setIsAdmin] = useState(false)
+  // RBAC: Only HEALTH_OFFICIAL and ADMIN can create alerts
+  const [canCreateAlerts, setCanCreateAlerts] = useState(false)
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
 
@@ -59,7 +62,10 @@ export default function AlertsPage() {
         getCurrentUserRole()
       ])
       setAlerts(alertsData)
-      setIsAdmin(role === 'admin')
+      // RBAC: Check if user can write to ALERTS module
+      // Only HEALTH_OFFICIAL and ADMIN can create/modify alerts
+      const normalizedRole = normalizeRole(role)
+      setCanCreateAlerts(hasWriteAccess(normalizedRole, 'ALERTS'))
     } catch (error) {
       console.error("Error loading alerts:", error)
     } finally {
@@ -117,7 +123,7 @@ export default function AlertsPage() {
   const highPriorityAlerts = alerts.filter(a => a.isActive && (a.severity === 'critical' || a.severity === 'emergency'))
 
   return (
-    <AuthGuard>
+    <RBACAuthGuard requiredModule="ALERTS">
       <DashboardLayout>
         <div className="space-y-8">
           {/* Header */}
@@ -125,10 +131,11 @@ export default function AlertsPage() {
             <div className="animate-fade-in">
               <h1 className="text-3xl font-bold">Alert Management</h1>
               <p className="text-muted-foreground mt-2">
-                {isAdmin ? "Monitor and manage health alerts across all villages" : "View health alerts for your area"}
+                {canCreateAlerts ? "Monitor and manage health alerts across all villages" : "View health alerts for your area"}
               </p>
             </div>
-            {isAdmin && (
+            {/* RBAC: Only HEALTH_OFFICIAL and ADMIN can create alerts */}
+            {canCreateAlerts && (
               <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
                 <DialogTrigger asChild>
                   <Button>
@@ -314,7 +321,7 @@ export default function AlertsPage() {
           ) : filteredAlerts.length === 0 ? (
             <Card>
               <CardContent className="py-12 text-center text-muted-foreground">
-                No alerts found. {isAdmin && "Create a new alert to notify users."}
+                No alerts found. {canCreateAlerts && "Create a new alert to notify users."}
               </CardContent>
             </Card>
           ) : (
@@ -373,7 +380,7 @@ export default function AlertsPage() {
                           <Eye className="h-4 w-4 mr-2" />
                           View
                         </Button>
-                        {isAdmin && (
+                        {canCreateAlerts && (
                           <Button
                             variant="destructive"
                             size="sm"
@@ -391,6 +398,6 @@ export default function AlertsPage() {
           )}
         </div>
       </DashboardLayout>
-    </AuthGuard>
+    </RBACAuthGuard>
   )
 }

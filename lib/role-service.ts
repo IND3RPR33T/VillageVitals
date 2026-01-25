@@ -4,6 +4,8 @@
 
 import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db, auth } from './firebase';
+import { normalizeRole } from './rbac/role-utils';
+import { hasReadAccess } from './rbac/permissions';
 
 // User roles - matches Flutter app
 export type UserRole = 'admin' | 'health_official' | 'asha_worker' | 'field_worker';
@@ -90,45 +92,57 @@ export async function setUserRole(userId: string, newRole: UserRole): Promise<bo
 }
 
 // ============== PERMISSION CHECKS ==============
+// Updated to use new RBAC system
 
 // Can view all reports (not just their own)
 export function canViewAllReports(role: UserRole | string): boolean {
-    return role === 'admin' || role === 'health_official' || role === 'asha_worker';
+    const normalizedRole = normalizeRole(role);
+    return hasReadAccess(normalizedRole, 'HEALTH_REPORTS') && 
+           (normalizedRole === 'ADMIN' || normalizedRole === 'HEALTH_OFFICIAL' || normalizedRole === 'ASHA_WORKER');
 }
 
 // Can view all water tests
 export function canViewAllWaterTests(role: UserRole | string): boolean {
-    return role === 'admin' || role === 'health_official' || role === 'asha_worker';
+    const normalizedRole = normalizeRole(role);
+    return hasReadAccess(normalizedRole, 'WATER_QUALITY') && 
+           (normalizedRole === 'ADMIN' || normalizedRole === 'HEALTH_OFFICIAL' || normalizedRole === 'FIELD_WORKER');
 }
 
 // Can view all emergency alerts
 export function canViewAllAlerts(role: UserRole | string): boolean {
-    return role === 'admin' || role === 'health_official' || role === 'asha_worker';
+    const normalizedRole = normalizeRole(role);
+    return hasReadAccess(normalizedRole, 'ALERTS') && 
+           (normalizedRole === 'ADMIN' || normalizedRole === 'HEALTH_OFFICIAL');
 }
 
 // Can manage other users (roles, access)
 export function canManageUsers(role: UserRole | string): boolean {
-    return role === 'admin';
+    const normalizedRole = normalizeRole(role);
+    return normalizedRole === 'ADMIN';
 }
 
 // Can create/edit awareness content
 export function canManageAwarenessContent(role: UserRole | string): boolean {
-    return role === 'admin';
+    const normalizedRole = normalizeRole(role);
+    return normalizedRole === 'ADMIN' || normalizedRole === 'ASHA_WORKER';
 }
 
 // Can delete any data
 export function canDeleteData(role: UserRole | string): boolean {
-    return role === 'admin';
+    const normalizedRole = normalizeRole(role);
+    return normalizedRole === 'ADMIN';
 }
 
 // Can export all data
 export function canExportAllData(role: UserRole | string): boolean {
-    return role === 'admin' || role === 'health_official';
+    const normalizedRole = normalizeRole(role);
+    return normalizedRole === 'ADMIN' || normalizedRole === 'HEALTH_OFFICIAL';
 }
 
 // Can access admin panel
 export function canAccessAdminPanel(role: UserRole | string): boolean {
-    return role === 'admin';
+    const normalizedRole = normalizeRole(role);
+    return normalizedRole === 'ADMIN';
 }
 
 // Can view analytics/statistics

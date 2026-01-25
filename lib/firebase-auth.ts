@@ -32,8 +32,8 @@ export interface UserProfile {
     organization?: string;
     district?: string;
     state?: string;
-    // Roles match Flutter app: asha_worker, health_official, field_worker, admin
-    role: 'asha_worker' | 'health_official' | 'field_worker' | 'admin';
+    // Support both old lowercase format (for Firestore compatibility) and new RBAC format
+    role: 'asha_worker' | 'health_official' | 'field_worker' | 'admin' | 'user';
     isVerified: boolean;
     isProfileComplete?: boolean;
     createdAt: any;
@@ -47,7 +47,7 @@ export async function signUp(data: {
     firstName: string;
     lastName: string;
     phone?: string;
-    role: 'asha_worker' | 'health_official' | 'field_worker' | 'admin';
+    role: 'asha_worker' | 'health_official' | 'field_worker' | 'admin' | 'user';
 }): Promise<UserProfile> {
     try {
         // Create Firebase Auth user
@@ -111,7 +111,7 @@ export async function signIn(data: {
             email: user.email || '',
             firstName: user.displayName?.split(' ')[0] || '',
             lastName: user.displayName?.split(' ').slice(1).join(' ') || '',
-            role: 'field_worker',
+            role: 'user',
             isVerified: user.emailVerified,
             createdAt: null,
             updatedAt: null,
@@ -157,7 +157,7 @@ export async function signInWithGoogle(): Promise<{ profile: UserProfile; isNewU
             lastName: names.slice(1).join(' ') || '',
             fullName: user.displayName || '',
             phone: user.phoneNumber || '',
-            role: 'field_worker', // Default role - matches Flutter app
+            role: 'user', // Default role for new users
             isVerified: true,
             isProfileComplete: false,
             createdAt: serverTimestamp(),

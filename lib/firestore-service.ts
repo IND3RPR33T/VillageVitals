@@ -12,10 +12,14 @@ import {
     orderBy,
     limit,
     updateDoc,
+    deleteDoc,
     serverTimestamp,
     Timestamp
 } from 'firebase/firestore';
 import { db, auth } from './firebase';
+import { getCurrentUserRole } from './role-service';
+import { normalizeRole } from './rbac/role-utils';
+import { hasWriteAccess } from './rbac/permissions';
 
 // ============== HEALTH REPORTS ==============
 
@@ -51,6 +55,7 @@ export async function addHealthReport(data: {
     numberOfCases: number;
     description?: string;
     contactInfo?: string;
+    images?: string[]; // Array of Cloudinary URLs
     incidentDate?: Date;
 }): Promise<string> {
     const user = auth.currentUser;
@@ -70,7 +75,7 @@ export async function addHealthReport(data: {
         numberOfCases: data.numberOfCases,
         description: data.description || '',
         contactInfo: data.contactInfo || '',
-        images: [],
+        images: data.images || [], // Include uploaded images
         status: 'active',
         createdAt: serverTimestamp() as Timestamp,
         updatedAt: serverTimestamp() as Timestamp,
@@ -333,7 +338,7 @@ export async function getSymptomReports(limitCount = 100) {
 
 // ============== ROLE-BASED QUERIES ==============
 
-import { getCurrentUserRole, canViewAllReports, canViewAllWaterTests } from './role-service';
+import { canViewAllReports, canViewAllWaterTests } from './role-service';
 
 // Get health reports based on user role
 export async function getHealthReportsForRole(limitCount = 50): Promise<HealthReport[]> {
@@ -515,8 +520,6 @@ export async function canEditDocument(documentUserId: string): Promise<boolean> 
 
 // ============== ADMIN FUNCTIONS ==============
 
-import { deleteDoc } from 'firebase/firestore';
-
 // Get all users (admin only)
 export async function getAllUsers(): Promise<any[]> {
     try {
@@ -601,7 +604,8 @@ export interface AwarenessContent {
     title: string;
     description: string;
     content: string;
-    category: 'health_tips' | 'disease_prevention' | 'water_safety' | 'emergency_prep' | 'nutrition' | 'general';
+    category: 'prevention' | 'treatment' | 'hygiene' | 'nutrition' | 'emergency' | 'general';
+    targetAudience?: string;
     imageUrl?: string;
     isFeatured: boolean;
     isActive: boolean;
@@ -610,7 +614,7 @@ export interface AwarenessContent {
     updatedAt: any;
 }
 
-// Add awareness content (admin only)
+// Add awareness content (ASHA_WORKER and ADMIN can create)
 export async function addAwarenessContent(data: {
     title: string;
     description: string;
@@ -618,18 +622,34 @@ export async function addAwarenessContent(data: {
     category: string;
     imageUrl?: string;
     isFeatured?: boolean;
+    targetAudience?: string;
 }): Promise<string> {
     const user = auth.currentUser;
     if (!user) throw new Error('Not authenticated');
 
     const role = await getCurrentUserRole();
-    if (role !== 'admin') throw new Error('Admin access required');
+    const normalizedRole = normalizeRole(role);
+    
+    // Allow ASHA_WORKER and ADMIN to create awareness content
+    if (!hasWriteAccess(normalizedRole, 'EDUCATION')) {
+        throw new Error('Insufficient permissions. Only ASHA Workers and Administrators can create awareness content.');
+    }
+
+    console.log('Creating awareness content with role:', normalizedRole);
+
+    console.log('📝 Creating awareness content data:', {
+        title: data.title,
+        category: data.category,
+        imageUrl: data.imageUrl || 'none',
+        createdBy: user.displayName || user.email
+    });
 
     const awarenessData: Omit<AwarenessContent, 'id'> = {
-        title: data.title,
-        description: data.description,
-        content: data.content,
+        title: data.title.trim(),
+        description: data.description.trim(),
+        content: data.content.trim(),
         category: data.category as AwarenessContent['category'],
+        targetAudience: data.targetAudience || 'general',
         imageUrl: data.imageUrl || '',
         isFeatured: data.isFeatured || false,
         isActive: true,
@@ -639,7 +659,10 @@ export async function addAwarenessContent(data: {
     };
 
     const docRef = await addDoc(collection(db, 'awareness_content'), awarenessData);
-    console.log('Awareness content added:', docRef.id);
+    console.log('✅ Awareness content saved to Firestore:');
+    console.log('   ID:', docRef.id);
+    console.log('   Title:', data.title);
+    console.log('   Image:', data.imageUrl ? '✅' : '❌');
     return docRef.id;
 }
 
@@ -664,7 +687,7 @@ export async function getAwarenessContent(limitCount = 50): Promise<AwarenessCon
     }
 }
 
-// Update awareness content (admin only)
+// Update awareness content (ASHA_WORKER and ADMIN)
 export async function updateAwarenessContent(
     docId: string,
     data: Partial<AwarenessContent>
@@ -674,12 +697,17 @@ export async function updateAwarenessContent(
         if (!user) throw new Error('Not authenticated');
 
         const role = await getCurrentUserRole();
-        if (role !== 'admin') throw new Error('Admin access required');
+        const normalizedRole = normalizeRole(role);
+        
+        if (!hasWriteAccess(normalizedRole, 'EDUCATION')) {
+            throw new Error('Insufficient permissions.');
+        }
 
         await updateDoc(doc(db, 'awareness_content', docId), {
             ...data,
             updatedAt: serverTimestamp()
         });
+        console.log('✅ Awareness content updated:', docId);
         return true;
     } catch (error) {
         console.error('Error updating awareness content:', error);
@@ -687,16 +715,21 @@ export async function updateAwarenessContent(
     }
 }
 
-// Delete awareness content (admin only)
+// Delete awareness content (ASHA_WORKER and ADMIN)
 export async function deleteAwarenessContent(docId: string): Promise<boolean> {
     try {
         const user = auth.currentUser;
         if (!user) throw new Error('Not authenticated');
 
         const role = await getCurrentUserRole();
-        if (role !== 'admin') throw new Error('Admin access required');
+        const normalizedRole = normalizeRole(role);
+        
+        if (!hasWriteAccess(normalizedRole, 'EDUCATION')) {
+            throw new Error('Insufficient permissions.');
+        }
 
         await deleteDoc(doc(db, 'awareness_content', docId));
+        console.log('✅ Awareness content deleted:', docId);
         return true;
     } catch (error) {
         console.error('Error deleting awareness content:', error);

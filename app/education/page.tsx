@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { AuthGuard } from "@/components/auth-guard"
+import { RBACAuthGuard } from "@/components/rbac-auth-guard"
 import { DashboardLayout } from "@/components/dashboard-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -13,9 +13,13 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { BookOpen, PlayCircle, Info, Droplet, Flame, Filter, ShieldCheck, Package, AlertTriangle, Thermometer, Activity, Plus, Trash2, Loader2, Megaphone } from "lucide-react"
+import { BookOpen, PlayCircle, Info, Droplet, Flame, Filter, ShieldCheck, Package, AlertTriangle, Thermometer, Activity, Plus, Trash2, Loader2, Megaphone, Upload, X } from "lucide-react"
 import { getAwarenessContent, addAwarenessContent, updateAwarenessContent, deleteAwarenessContent, type AwarenessContent } from "@/lib/firestore-service"
+import { UserRole, Module } from "@/lib/rbac/types"
+import { hasWriteAccess } from "@/lib/rbac/permissions"
+import { normalizeRole } from "@/lib/rbac/role-utils"
 import { getCurrentUserRole } from "@/lib/role-service"
+import { uploadImage, validateImageFile, compressImage, type UploadResult } from "@/lib/cloudinary-service"
 
 const guides = [
   {
@@ -112,17 +116,23 @@ const infographics = [
 ]
 
 export default function EducationPage() {
-  const [isAdmin, setIsAdmin] = useState(false)
+  // RBAC: Only ASHA_WORKER and ADMIN can write to education module
+  const [canWriteContent, setCanWriteContent] = useState(false)
   const [loading, setLoading] = useState(true)
   const [awarenessContent, setAwarenessContent] = useState<AwarenessContent[]>([])
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [isUploading, setIsUploading] = useState(false)
+  const [selectedImage, setSelectedImage] = useState<File | null>(null)
+  const [imagePreview, setImagePreview] = useState<string | null>(null)
 
   const [newContent, setNewContent] = useState({
     title: "",
+    description: "",
     content: "",
     category: "general" as "prevention" | "treatment" | "hygiene" | "nutrition" | "emergency" | "general",
     targetAudience: "general" as "general" | "health_workers" | "community_leaders" | "all",
+    imageUrl: "",
   })
 
   useEffect(() => {
@@ -137,7 +147,10 @@ export default function EducationPage() {
         getCurrentUserRole(),
       ])
       setAwarenessContent(content)
-      setIsAdmin(role === 'admin')
+      // RBAC: Check if user can write to EDUCATION module
+      // Only ASHA_WORKER and ADMIN can publish awareness content
+      const normalizedRole = normalizeRole(role)
+      setCanWriteContent(hasWriteAccess(normalizedRole, 'EDUCATION'))
     } catch (error) {
       console.error('Error loading awareness content:', error)
     } finally {
@@ -145,23 +158,92 @@ export default function EducationPage() {
     }
   }
 
+  const handleImageSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      alert('Please select an image file (JPG, PNG, WebP)')
+      return
+    }
+
+    // Validate file size (10MB)
+    if (file.size > 10 * 1024 * 1024) {
+      alert('Image size must be less than 10MB')
+      return
+    }
+
+    setSelectedImage(file)
+
+    // Create preview
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      setImagePreview(e.target?.result as string)
+    }
+    reader.readAsDataURL(file)
+  }
+
+  const removeImage = () => {
+    setSelectedImage(null)
+    setImagePreview(null)
+    setIsUploading(false)
+  }
+
   const handleCreateContent = async () => {
-    if (!newContent.title || !newContent.content) return
+    if (!newContent.title || !newContent.description || !newContent.content) {
+      alert('Please fill in all required fields')
+      return
+    }
+    
     setIsSaving(true)
     try {
-      await addAwarenessContent(newContent)
+      let imageUrl = ''
+      
+      // Upload image if selected
+      if (selectedImage) {
+        console.log('📤 Uploading image to Cloudinary...')
+        setIsUploading(true)
+        const compressed = await compressImage(selectedImage, 0.8)
+        const uploadResult = await uploadImage(compressed, {
+          folder: 'awareness_content',
+          quality: 'auto',
+          format: 'auto'
+        })
+        imageUrl = uploadResult.secure_url
+        console.log('✅ Image uploaded:', imageUrl)
+      }
+      
+      const contentData = {
+        ...newContent,
+        imageUrl
+      }
+      
+      console.log('💾 Creating awareness content:', contentData)
+      await addAwarenessContent(contentData)
+      
+      // Reset form
       setIsCreateOpen(false)
       setNewContent({
         title: "",
+        description: "",
         content: "",
         category: "general",
         targetAudience: "general",
+        imageUrl: "",
       })
-      loadData()
+      setSelectedImage(null)
+      setImagePreview(null)
+      
+      // Reload data
+      await loadData()
+      console.log('✅ Awareness content created successfully!')
     } catch (error) {
-      console.error('Error creating content:', error)
+      console.error('❌ Error creating content:', error)
+      alert(`Failed to create content: ${error instanceof Error ? error.message : 'Unknown error'}`)
     } finally {
       setIsSaving(false)
+      setIsUploading(false)
     }
   }
 
@@ -172,7 +254,7 @@ export default function EducationPage() {
   }
 
   return (
-    <AuthGuard>
+    <RBACAuthGuard requiredModule="EDUCATION">
       <DashboardLayout>
         <div className="space-y-8">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -180,7 +262,8 @@ export default function EducationPage() {
               <h1 className="text-3xl font-bold">Educational Resources</h1>
               <p className="text-muted-foreground">Infographics, videos, and guides to prevent water-borne diseases.</p>
             </div>
-            {isAdmin && (
+            {/* RBAC: Only show create button if user has WRITE access (ASHA_WORKER or ADMIN) */}
+            {canWriteContent && (
               <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
                 <DialogTrigger asChild>
                   <Button>
@@ -205,6 +288,14 @@ export default function EducationPage() {
                       />
                     </div>
                     <div className="space-y-2">
+                      <Label>Description *</Label>
+                      <Input
+                        value={newContent.description}
+                        onChange={(e) => setNewContent({ ...newContent, description: e.target.value })}
+                        placeholder="Brief description of the content"
+                      />
+                    </div>
+                    <div className="space-y-2">
                       <Label>Content *</Label>
                       <Textarea
                         value={newContent.content}
@@ -212,6 +303,50 @@ export default function EducationPage() {
                         placeholder="Educational content..."
                         rows={4}
                       />
+                    </div>
+                    
+                    {/* Image Upload Section */}
+                    <div className="space-y-2">
+                      <Label>Cover Image (Optional)</Label>
+                      <div className="border-2 border-dashed border-gray-300 rounded-lg p-4">
+                        {imagePreview ? (
+                          <div className="relative">
+                            <img
+                              src={imagePreview}
+                              alt="Preview"
+                              className="w-full h-32 object-cover rounded"
+                            />
+                            <button
+                              type="button"
+                              onClick={removeImage}
+                              className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="text-center">
+                            <Upload className="mx-auto h-8 w-8 text-gray-400" />
+                            <p className="mt-2 text-sm text-gray-600">Upload an image</p>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={handleImageSelect}
+                              className="hidden"
+                              id="image-upload"
+                            />
+                            <label
+                              htmlFor="image-upload"
+                              className="cursor-pointer inline-flex items-center px-3 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 mt-2"
+                            >
+                              Choose Image
+                            </label>
+                          </div>
+                        )}
+                      </div>
+                      <p className="text-xs text-gray-500">
+                        Supported formats: JPG, PNG, WebP. Max size: 10MB
+                      </p>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
@@ -249,10 +384,12 @@ export default function EducationPage() {
                     </div>
                   </div>
                   <DialogFooter>
-                    <Button variant="outline" onClick={() => setIsCreateOpen(false)}>Cancel</Button>
-                    <Button onClick={handleCreateContent} disabled={isSaving}>
-                      {isSaving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                      Create Content
+                    <Button variant="outline" onClick={() => setIsCreateOpen(false)} disabled={isSaving}>
+                      Cancel
+                    </Button>
+                    <Button onClick={handleCreateContent} disabled={isSaving || isUploading}>
+                      {(isSaving || isUploading) && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                      {isUploading ? 'Uploading...' : isSaving ? 'Creating...' : 'Create Content'}
                     </Button>
                   </DialogFooter>
                 </DialogContent>
@@ -274,9 +411,16 @@ export default function EducationPage() {
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                   {awarenessContent.map((item) => (
                     <div key={item.id} className="p-4 border rounded-lg">
+                      {item.imageUrl && (
+                        <img 
+                          src={item.imageUrl} 
+                          alt={item.title}
+                          className="w-full h-32 object-cover rounded mb-3"
+                        />
+                      )}
                       <div className="flex items-start justify-between mb-2">
                         <h3 className="font-semibold">{item.title}</h3>
-                        {isAdmin && (
+                        {canWriteContent && (
                           <Button
                             variant="ghost"
                             size="sm"
@@ -290,7 +434,9 @@ export default function EducationPage() {
                       <p className="text-sm text-muted-foreground mb-2 line-clamp-3">{item.content}</p>
                       <div className="flex gap-2">
                         <Badge variant="secondary" className="text-xs">{item.category}</Badge>
-                        <Badge variant="outline" className="text-xs">{item.targetAudience}</Badge>
+                        {item.targetAudience && (
+                          <Badge variant="outline" className="text-xs">{item.targetAudience}</Badge>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -663,6 +809,6 @@ export default function EducationPage() {
           </Tabs>
         </div>
       </DashboardLayout>
-    </AuthGuard>
+    </RBACAuthGuard>
   )
 }

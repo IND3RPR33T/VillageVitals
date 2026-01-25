@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useEffect } from "react"
-import { AuthGuard } from "@/components/auth-guard"
+import { RBACAuthGuard } from "@/components/rbac-auth-guard"
 import { DashboardLayout } from "@/components/dashboard-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -17,9 +17,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { format } from "date-fns"
 import { CalendarIcon, Droplets, AlertTriangle, CheckCircle, TrendingUp, Eye, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import Link from "next/link"
 import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Area, AreaChart } from "recharts"
 import { getWaterQualityTestsForRole, type WaterQualityTest } from "@/lib/firestore-service"
 import { getCurrentUserRole } from "@/lib/role-service"
+import { normalizeRole } from "@/lib/rbac/role-utils"
 
 const getRiskColor = (risk: string) => {
   switch (risk) {
@@ -113,7 +115,10 @@ export default function WaterQualityPage() {
         getCurrentUserRole(),
       ])
       setRecentTests(tests)
-      setIsAdmin(role === 'admin')
+      
+      // Normalize role for admin check
+      const normalizedRole = normalizeRole(role)
+      setIsAdmin(normalizedRole === 'ADMIN')
 
       // Generate trends from real data
       const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
@@ -305,7 +310,7 @@ export default function WaterQualityPage() {
 
   if (isSubmitted) {
     return (
-      <AuthGuard>
+      <RBACAuthGuard requiredModule="WATER_QUALITY">
         <DashboardLayout>
           <div className="max-w-2xl mx-auto">
             <Card className="text-center animate-slide-up">
@@ -328,12 +333,12 @@ export default function WaterQualityPage() {
             </Card>
           </div>
         </DashboardLayout>
-      </AuthGuard>
+      </RBACAuthGuard>
     )
   }
 
   return (
-    <AuthGuard>
+    <RBACAuthGuard requiredModule="WATER_QUALITY">
       <DashboardLayout>
         <div className="space-y-8">
           <div className="animate-fade-in">
@@ -714,10 +719,10 @@ export default function WaterQualityPage() {
                     <CardDescription>Latest test results from all sources</CardDescription>
                   </div>
                   <Button asChild>
-                    <a href="/reports">
+                    <Link href="/reports">
                       <Eye className="h-4 w-4 mr-2" />
                       View All Reports
-                    </a>
+                    </Link>
                   </Button>
                 </CardHeader>
                 <CardContent>
@@ -761,6 +766,6 @@ export default function WaterQualityPage() {
           </Tabs>
         </div>
       </DashboardLayout>
-    </AuthGuard>
+    </RBACAuthGuard>
   )
 }
