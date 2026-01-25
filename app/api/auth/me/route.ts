@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getUserById } from '@/lib/db';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 import { verifyToken } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
@@ -23,8 +24,21 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const user = await getUserById(payload.userId);
-    if (!user) {
+    // Get user from Firestore by UID
+    let userData: any = null;
+    const userDoc = await getDoc(doc(db, 'users', payload.userId));
+    
+    if (userDoc.exists()) {
+      userData = userDoc.data();
+    } else if (payload.email) {
+      // Try by email
+      const emailDoc = await getDoc(doc(db, 'users', payload.email.toLowerCase()));
+      if (emailDoc.exists()) {
+        userData = emailDoc.data();
+      }
+    }
+
+    if (!userData) {
       return NextResponse.json(
         { error: 'User not found' },
         { status: 404 }
@@ -33,14 +47,14 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       user: {
-        id: user.id,
-        firstName: user.first_name,
-        lastName: user.last_name,
-        email: user.email,
-        phone: user.phone,
-        role: user.role,
-        isVerified: user.is_verified,
-        createdAt: user.created_at,
+        id: payload.userId,
+        firstName: userData.firstName,
+        lastName: userData.lastName,
+        email: userData.email,
+        phone: userData.phone,
+        role: userData.role,
+        isVerified: userData.isVerified,
+        createdAt: userData.createdAt?.toDate?.() || userData.createdAt,
       },
     });
 

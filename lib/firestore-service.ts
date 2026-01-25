@@ -672,6 +672,8 @@ export async function addAwarenessContent(data: {
 // Get awareness content
 export async function getAwarenessContent(limitCount = 50): Promise<AwarenessContent[]> {
     try {
+        console.log('📚 Fetching awareness content from Firestore...');
+        
         // Simple query without composite index requirement
         const q = query(
             collection(db, 'awareness_content'),
@@ -680,15 +682,24 @@ export async function getAwarenessContent(limitCount = 50): Promise<AwarenessCon
         );
 
         const snapshot = await getDocs(q);
-        const allContent = snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-        })) as AwarenessContent[];
+        console.log(`📚 Found ${snapshot.docs.length} awareness documents`);
+        
+        const allContent = snapshot.docs.map(doc => {
+            const data = doc.data();
+            console.log('📄 Document:', doc.id, data.title);
+            return {
+                id: doc.id,
+                ...data
+            };
+        }) as AwarenessContent[];
         
         // Filter active content client-side to avoid index requirements
-        return allContent.filter(item => item.isActive !== false);
+        const activeContent = allContent.filter(item => item.isActive !== false);
+        console.log(`📚 Active awareness content: ${activeContent.length}`);
+        
+        return activeContent;
     } catch (error) {
-        console.error('Error fetching awareness content:', error);
+        console.error('❌ Error fetching awareness content:', error);
         return [];
     }
 }

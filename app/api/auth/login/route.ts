@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getUserByEmailOrPhone } from '@/lib/db';
-import { comparePassword, generateToken } from '@/lib/auth';
+import { doc, getDoc, query, collection, where, getDocs } from 'firebase/firestore';
+import { signInWithEmailAndPassword } from 'firebase/auth';
+import { db, auth } from '@/lib/firebase';
+import { generateToken } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,35 +19,86 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Find user by email or phone
-    const user = await getUserByEmailOrPhone(contact);
-    
-    if (!user) {
+    // Check if contact is email or phone
+    const isEmail = contact.includes('@');
+    let userEmail = contact;
+    let userData: any = null;
+
+    if (!isEmail) {
+      // If phone number, find user by phone first
+      const usersRef = collection(db, 'users');
+      const q = query(usersRef, where('phone', '==', contact));
+      const querySnapshot = await getDocs(q);
+      
+      if (querySnapshot.empty) {
+        return NextResponse.json(
+          { error: 'Invalid credentials' },
+          { status: 401 }
+        );
+      }
+      
+      userData = querySnapshot.docs[0].data();
+      userEmail = userData.email;
+    }
+
+    // Sign in with Firebase Auth
+    let userCredential;
+    try {
+      userCredential = await signInWithEmailAndPassword(auth, userEmail, password);
+    } catch (authError: any) {
+      console.error('Firebase Auth error:', authError.code);
       return NextResponse.json(
         { error: 'Invalid credentials' },
         { status: 401 }
       );
     }
 
+    // Get user data from Firestore
+    if (!userData) {
+      const userDoc = await getDoc(doc(db, 'users', userCredential.user.uid));
+      if (!userDoc.exists()) {
+        // Try by email
+        const emailDoc = await getDoc(doc(db, 'users', userEmail.toLowerCase()));
+        if (emailDoc.exists()) {
+          userData = emailDoc.data();
+        }
+      } else {
+        userData = userDoc.data();
+      }
+    }
+
+    if (!userData) {
+      return NextResponse.json(
+        { error: 'User profile not found' },
+        { status: 404 }
+      );
+    }
+
     // Check if user is verified
-    if (!user.is_verified) {
+    if (!userData.isVerified) {
       return NextResponse.json(
         { error: 'Please verify your account first. Check your email for the OTP code.' },
         { status: 401 }
       );
     }
 
-    // Verify password
-    const isValidPassword = comparePassword(password, user.password_hash);
-    if (!isValidPassword) {
-      return NextResponse.json(
-        { error: 'Invalid credentials' },
-        { status: 401 }
-      );
-    }
+    // Map role for comparison
+    const roleMap: Record<string, string> = {
+      'community': 'COMMUNITY_MEMBER',
+      'health-worker': 'ASHA_WORKER',
+      'asha_worker': 'ASHA_WORKER',
+      'admin': 'ADMIN',
+      'COMMUNITY_MEMBER': 'COMMUNITY_MEMBER',
+      'ASHA_WORKER': 'ASHA_WORKER',
+      'ADMIN': 'ADMIN',
+      'HEALTH_OFFICIAL': 'HEALTH_OFFICIAL',
+    };
 
-    // Check if role matches
-    if (user.role !== role) {
+    const normalizedInputRole = roleMap[role] || role;
+    const normalizedUserRole = roleMap[userData.role] || userData.role;
+
+    // Check if role matches (case-insensitive)
+    if (normalizedInputRole.toUpperCase() !== normalizedUserRole.toUpperCase()) {
       return NextResponse.json(
         { error: 'Invalid role selected' },
         { status: 401 }
@@ -54,22 +107,22 @@ export async function POST(request: NextRequest) {
 
     // Generate JWT token
     const token = generateToken({
-      userId: user.id,
-      email: user.email,
-      role: user.role,
+      userId: userCredential.user.uid,
+      email: userData.email,
+      role: userData.role,
     });
 
     // Create response with token in cookie
     const response = NextResponse.json({
       message: 'Login successful',
       user: {
-        id: user.id,
-        firstName: user.first_name,
-        lastName: user.last_name,
-        email: user.email,
-        phone: user.phone,
-        role: user.role,
-        isVerified: user.is_verified,
+        id: userCredential.user.uid,
+        firstName: userData.firstName,
+        lastName: userData.lastName,
+        email: userData.email,
+        phone: userData.phone,
+        role: userData.role,
+        isVerified: userData.isVerified,
       },
     });
 
