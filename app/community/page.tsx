@@ -1,6 +1,6 @@
 "use client"
 
-import { RBACAuthGuard } from "@/components/rbac-auth-guard"
+import { AuthGuard } from "@/components/auth-guard"
 import { DashboardLayout } from "@/components/dashboard-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -11,7 +11,7 @@ import { MessageSquare, Megaphone, Send } from "lucide-react"
 
 export default function CommunityPage() {
   return (
-    <RBACAuthGuard requiredModule="COMMUNITY">
+    <AuthGuard>
       <DashboardLayout>
         <div className="space-y-8">
           <div>
@@ -78,6 +78,6 @@ export default function CommunityPage() {
           </Tabs>
         </div>
       </DashboardLayout>
-    </RBACAuthGuard>
+    </AuthGuard>
   )
 }

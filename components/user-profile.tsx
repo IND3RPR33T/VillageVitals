@@ -23,34 +23,55 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { onAuthChange, getCurrentUserProfile, logOut, type UserProfile as FirebaseUserProfile } from "@/lib/firebase-auth"
+
+interface UserProfile {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  role: string;
+  isVerified: boolean;
+  createdAt: string;
+}
 
 interface UserProfileProps {
   compact?: boolean; // For mobile version
 }
 
 export function UserProfile({ compact = false }: UserProfileProps) {
-  const [user, setUser] = useState<FirebaseUserProfile | null>(null)
+  const [user, setUser] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState(true)
   const router = useRouter()
 
   useEffect(() => {
-    const unsubscribe = onAuthChange(async (firebaseUser) => {
-      if (firebaseUser) {
-        const profile = await getCurrentUserProfile()
-        setUser(profile)
-      } else {
-        setUser(null)
-      }
-      setLoading(false)
-    })
-
-    return () => unsubscribe()
+    fetchUserProfile()
   }, [])
+
+  const fetchUserProfile = async () => {
+    try {
+      const response = await fetch("/api/auth/me", {
+        method: "GET",
+        credentials: "include",
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        setUser(data.user)
+      }
+    } catch (error) {
+      console.error("Failed to fetch user profile:", error)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const handleLogout = async () => {
     try {
-      await logOut()
+      await fetch("/api/auth/logout", {
+        method: "POST",
+        credentials: "include",
+      })
       router.push("/login")
     } catch (error) {
       console.error("Logout error:", error)
@@ -62,34 +83,21 @@ export function UserProfile({ compact = false }: UserProfileProps) {
     switch (role) {
       case 'admin':
         return 'bg-red-100 text-red-800 border-red-200'
-      case 'health_official':
+      case 'health-worker':
         return 'bg-blue-100 text-blue-800 border-blue-200'
-      case 'asha_worker':
+      case 'community':
         return 'bg-green-100 text-green-800 border-green-200'
-      case 'field_worker':
-        return 'bg-orange-100 text-orange-800 border-orange-200'
       default:
         return 'bg-gray-100 text-gray-800 border-gray-200'
     }
   }
 
   const formatRole = (role: string) => {
-    switch (role) {
-      case 'asha_worker':
-        return 'ASHA Worker'
-      case 'health_official':
-        return 'Health Official'
-      case 'field_worker':
-        return 'Field Worker'
-      case 'admin':
-        return 'Administrator'
-      default:
-        return role.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())
-    }
+    return role.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase())
   }
 
   const getInitials = (firstName: string, lastName: string) => {
-    return `${firstName?.charAt(0) || ''}${lastName?.charAt(0) || ''}`.toUpperCase() || 'U'
+    return `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase()
   }
 
   if (loading) {
@@ -102,19 +110,8 @@ export function UserProfile({ compact = false }: UserProfileProps) {
   }
 
   if (!user) {
-    return (
-      <Button variant="ghost" size="sm" asChild>
-        <Link href="/login">
-          <User className="w-4 h-4 mr-2" />
-          Login
-        </Link>
-      </Button>
-    )
+    return null
   }
-
-  const firstName = user.firstName || user.fullName?.split(' ')[0] || ''
-  const lastName = user.lastName || user.fullName?.split(' ').slice(1).join(' ') || ''
-  const displayPhone = user.phone || user.phoneNumber || ''
 
   if (compact) {
     // Mobile compact version
@@ -123,8 +120,9 @@ export function UserProfile({ compact = false }: UserProfileProps) {
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" className="relative h-10 w-10 rounded-full">
             <Avatar className="h-8 w-8">
+              <AvatarImage src={`/api/placeholder/32/32?text=${getInitials(user.firstName, user.lastName)}`} />
               <AvatarFallback className="text-xs">
-                {getInitials(firstName, lastName)}
+                {getInitials(user.firstName, user.lastName)}
               </AvatarFallback>
             </Avatar>
           </Button>
@@ -132,7 +130,7 @@ export function UserProfile({ compact = false }: UserProfileProps) {
         <DropdownMenuContent className="w-56" align="end" forceMount>
           <DropdownMenuLabel className="font-normal">
             <div className="flex flex-col space-y-1">
-              <p className="text-sm font-medium">{firstName} {lastName}</p>
+              <p className="text-sm font-medium">{user.firstName} {user.lastName}</p>
               <p className="text-xs text-muted-foreground">{user.email}</p>
             </div>
           </DropdownMenuLabel>
@@ -166,14 +164,15 @@ export function UserProfile({ compact = false }: UserProfileProps) {
         <Button variant="ghost" className="h-auto p-2 hover:bg-accent/50 transition-colors">
           <div className="flex items-center gap-3">
             <Avatar className="h-10 w-10 ring-2 ring-primary/10">
+              <AvatarImage src={`/api/placeholder/40/40?text=${getInitials(user.firstName, user.lastName)}`} />
               <AvatarFallback className="bg-gradient-to-r from-blue-500 to-purple-600 text-white font-semibold">
-                {getInitials(firstName, lastName)}
+                {getInitials(user.firstName, user.lastName)}
               </AvatarFallback>
             </Avatar>
             <div className="flex flex-col items-start gap-1 min-w-0">
               <div className="flex items-center gap-2">
                 <span className="text-sm font-semibold text-foreground truncate">
-                  {firstName} {lastName}
+                  {user.firstName} {user.lastName}
                 </span>
                 {user.isVerified && (
                   <Shield className="w-3 h-3 text-green-600 fill-green-100" />
@@ -195,14 +194,15 @@ export function UserProfile({ compact = false }: UserProfileProps) {
         <div className="p-4 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950 dark:to-purple-950">
           <div className="flex items-center gap-3">
             <Avatar className="h-12 w-12 ring-2 ring-white dark:ring-gray-800">
+              <AvatarImage src={`/api/placeholder/48/48?text=${getInitials(user.firstName, user.lastName)}`} />
               <AvatarFallback className="bg-gradient-to-r from-blue-500 to-purple-600 text-white font-bold text-lg">
-                {getInitials(firstName, lastName)}
+                {getInitials(user.firstName, user.lastName)}
               </AvatarFallback>
             </Avatar>
             <div className="flex flex-col gap-1">
               <div className="flex items-center gap-2">
                 <h3 className="font-semibold text-foreground">
-                  {firstName} {lastName}
+                  {user.firstName} {user.lastName}
                 </h3>
                 {user.isVerified && (
                   <Shield className="w-4 h-4 text-green-600 fill-green-100" />
@@ -224,23 +224,19 @@ export function UserProfile({ compact = false }: UserProfileProps) {
             <Mail className="w-4 h-4 text-muted-foreground" />
             <span className="text-muted-foreground truncate">{user.email}</span>
           </div>
-          {displayPhone && (
-            <div className="flex items-center gap-3 text-sm">
-              <Phone className="w-4 h-4 text-muted-foreground" />
-              <span className="text-muted-foreground">{displayPhone}</span>
-            </div>
-          )}
-          {user.createdAt && (
-            <div className="flex items-center gap-3 text-sm">
-              <Calendar className="w-4 h-4 text-muted-foreground" />
-              <span className="text-muted-foreground">
-                Member since {user.createdAt.toDate ?
-                  user.createdAt.toDate().toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) :
-                  new Date(user.createdAt).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
-                }
-              </span>
-            </div>
-          )}
+          <div className="flex items-center gap-3 text-sm">
+            <Phone className="w-4 h-4 text-muted-foreground" />
+            <span className="text-muted-foreground">{user.phone}</span>
+          </div>
+          <div className="flex items-center gap-3 text-sm">
+            <Calendar className="w-4 h-4 text-muted-foreground" />
+            <span className="text-muted-foreground">
+              Member since {new Date(user.createdAt).toLocaleDateString('en-US', {
+                month: 'short',
+                year: 'numeric'
+              })}
+            </span>
+          </div>
         </div>
 
         <DropdownMenuSeparator />

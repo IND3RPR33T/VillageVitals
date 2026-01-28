@@ -1,25 +1,13 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { RBACAuthGuard } from "@/components/rbac-auth-guard"
+import { AuthGuard } from "@/components/auth-guard"
 import { DashboardLayout } from "@/components/dashboard-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { AspectRatio } from "@/components/ui/aspect-ratio"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import { Badge } from "@/components/ui/badge"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { BookOpen, PlayCircle, Info, Droplet, Flame, Filter, ShieldCheck, Package, AlertTriangle, Thermometer, Activity, Plus, Trash2, Loader2, Megaphone, Upload, X } from "lucide-react"
-import { getAwarenessContent, addAwarenessContent, updateAwarenessContent, deleteAwarenessContent, type AwarenessContent } from "@/lib/firestore-service"
-import { UserRole, Module } from "@/lib/rbac/types"
-import { hasWriteAccess } from "@/lib/rbac/permissions"
-import { normalizeRole } from "@/lib/rbac/role-utils"
-import { getCurrentUserRole } from "@/lib/role-service"
-import { uploadImage, validateImageFile, compressImage, type UploadResult } from "@/lib/cloudinary-service"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { BookOpen, PlayCircle, Info, Droplet, Flame, Filter, ShieldCheck, Package, AlertTriangle, Thermometer, Activity } from "lucide-react"
+import { Boxes } from "@/components/ui/background-boxes"
 
 const guides = [
   {
@@ -116,699 +104,385 @@ const infographics = [
 ]
 
 export default function EducationPage() {
-  // RBAC: Only ASHA_WORKER and ADMIN can write to education module
-  const [canWriteContent, setCanWriteContent] = useState(false)
-  const [loading, setLoading] = useState(true)
-  const [awarenessContent, setAwarenessContent] = useState<AwarenessContent[]>([])
-  const [isCreateOpen, setIsCreateOpen] = useState(false)
-  const [isSaving, setIsSaving] = useState(false)
-  const [isUploading, setIsUploading] = useState(false)
-  const [selectedImage, setSelectedImage] = useState<File | null>(null)
-  const [imagePreview, setImagePreview] = useState<string | null>(null)
-
-  const [newContent, setNewContent] = useState({
-    title: "",
-    description: "",
-    content: "",
-    category: "general" as "prevention" | "treatment" | "hygiene" | "nutrition" | "emergency" | "general",
-    targetAudience: "general" as "general" | "health_workers" | "community_leaders" | "all",
-    imageUrl: "",
-  })
-
-  useEffect(() => {
-    loadData()
-  }, [])
-
-  const loadData = async () => {
-    setLoading(true)
-    try {
-      const [content, role] = await Promise.all([
-        getAwarenessContent(50),
-        getCurrentUserRole(),
-      ])
-      setAwarenessContent(content)
-      // RBAC: Check if user can write to EDUCATION module
-      // Only ASHA_WORKER and ADMIN can publish awareness content
-      const normalizedRole = normalizeRole(role)
-      setCanWriteContent(hasWriteAccess(normalizedRole, 'EDUCATION'))
-    } catch (error) {
-      console.error('Error loading awareness content:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleImageSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (!file) return
-
-    // Validate file type
-    if (!file.type.startsWith('image/')) {
-      alert('Please select an image file (JPG, PNG, WebP)')
-      return
-    }
-
-    // Validate file size (10MB)
-    if (file.size > 10 * 1024 * 1024) {
-      alert('Image size must be less than 10MB')
-      return
-    }
-
-    setSelectedImage(file)
-
-    // Create preview
-    const reader = new FileReader()
-    reader.onload = (e) => {
-      setImagePreview(e.target?.result as string)
-    }
-    reader.readAsDataURL(file)
-  }
-
-  const removeImage = () => {
-    setSelectedImage(null)
-    setImagePreview(null)
-    setIsUploading(false)
-  }
-
-  const handleCreateContent = async () => {
-    if (!newContent.title || !newContent.description || !newContent.content) {
-      alert('Please fill in all required fields')
-      return
-    }
-    
-    setIsSaving(true)
-    try {
-      let imageUrl = ''
-      
-      // Upload image if selected
-      if (selectedImage) {
-        console.log('📤 Uploading image to Cloudinary...')
-        setIsUploading(true)
-        const compressed = await compressImage(selectedImage, 0.8)
-        const uploadResult = await uploadImage(compressed, {
-          folder: 'awareness_content',
-          quality: 'auto',
-          format: 'auto'
-        })
-        imageUrl = uploadResult.secure_url
-        console.log('✅ Image uploaded:', imageUrl)
-      }
-      
-      const contentData = {
-        ...newContent,
-        imageUrl
-      }
-      
-      console.log('💾 Creating awareness content:', contentData)
-      await addAwarenessContent(contentData)
-      
-      // Reset form
-      setIsCreateOpen(false)
-      setNewContent({
-        title: "",
-        description: "",
-        content: "",
-        category: "general",
-        targetAudience: "general",
-        imageUrl: "",
-      })
-      setSelectedImage(null)
-      setImagePreview(null)
-      
-      // Reload data
-      await loadData()
-      console.log('✅ Awareness content created successfully!')
-    } catch (error) {
-      console.error('❌ Error creating content:', error)
-      alert(`Failed to create content: ${error instanceof Error ? error.message : 'Unknown error'}`)
-    } finally {
-      setIsSaving(false)
-      setIsUploading(false)
-    }
-  }
-
-  const handleDeleteContent = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this awareness content?")) return
-    const success = await deleteAwarenessContent(id)
-    if (success) loadData()
-  }
-
   return (
-    <RBACAuthGuard requiredModule="EDUCATION">
+    <AuthGuard>
       <DashboardLayout>
-        <div className="space-y-8">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="relative w-full bg-slate-50 dark:bg-slate-950 rounded-lg">
+          <div className="absolute inset-0 w-full h-full pointer-events-none z-0 overflow-hidden rounded-lg">
+            <div className="absolute inset-0 w-full h-full bg-slate-50 dark:bg-slate-950 z-20 [mask-image:radial-gradient(transparent,white)]" />
+            <Boxes />
+          </div>
+          <div className="relative z-10 space-y-8 p-6">
             <div>
               <h1 className="text-3xl font-bold">Educational Resources</h1>
               <p className="text-muted-foreground">Infographics, videos, and guides to prevent water-borne diseases.</p>
             </div>
-            {/* RBAC: Only show create button if user has WRITE access (ASHA_WORKER or ADMIN) */}
-            {canWriteContent && (
-              <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-                <DialogTrigger asChild>
-                  <Button>
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Awareness Content
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="max-w-lg">
-                  <DialogHeader>
-                    <DialogTitle>Create Awareness Content</DialogTitle>
-                    <DialogDescription>
-                      This content will be synced to the Flutter mobile app
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div className="space-y-4 py-4">
-                    <div className="space-y-2">
-                      <Label>Title *</Label>
-                      <Input
-                        value={newContent.title}
-                        onChange={(e) => setNewContent({ ...newContent, title: e.target.value })}
-                        placeholder="Awareness content title"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Description *</Label>
-                      <Input
-                        value={newContent.description}
-                        onChange={(e) => setNewContent({ ...newContent, description: e.target.value })}
-                        placeholder="Brief description of the content"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Content *</Label>
-                      <Textarea
-                        value={newContent.content}
-                        onChange={(e) => setNewContent({ ...newContent, content: e.target.value })}
-                        placeholder="Educational content..."
-                        rows={4}
-                      />
-                    </div>
-                    
-                    {/* Image Upload Section */}
-                    <div className="space-y-2">
-                      <Label>Cover Image (Optional)</Label>
-                      <div className="border-2 border-dashed border-gray-300 rounded-lg p-4">
-                        {imagePreview ? (
-                          <div className="relative">
-                            <img
-                              src={imagePreview}
-                              alt="Preview"
-                              className="w-full h-32 object-cover rounded"
-                            />
-                            <button
-                              type="button"
-                              onClick={removeImage}
-                              className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
-                            >
-                              <X className="h-4 w-4" />
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="text-center">
-                            <Upload className="mx-auto h-8 w-8 text-gray-400" />
-                            <p className="mt-2 text-sm text-gray-600">Upload an image</p>
-                            <input
-                              type="file"
-                              accept="image/*"
-                              onChange={handleImageSelect}
-                              className="hidden"
-                              id="image-upload"
-                            />
-                            <label
-                              htmlFor="image-upload"
-                              className="cursor-pointer inline-flex items-center px-3 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 mt-2"
-                            >
-                              Choose Image
-                            </label>
-                          </div>
-                        )}
-                      </div>
-                      <p className="text-xs text-gray-500">
-                        Supported formats: JPG, PNG, WebP. Max size: 10MB
-                      </p>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label>Category</Label>
-                        <Select
-                          value={newContent.category}
-                          onValueChange={(v: any) => setNewContent({ ...newContent, category: v })}
-                        >
-                          <SelectTrigger><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="general">General</SelectItem>
-                            <SelectItem value="prevention">Prevention</SelectItem>
-                            <SelectItem value="treatment">Treatment</SelectItem>
-                            <SelectItem value="hygiene">Hygiene</SelectItem>
-                            <SelectItem value="nutrition">Nutrition</SelectItem>
-                            <SelectItem value="emergency">Emergency</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Target Audience</Label>
-                        <Select
-                          value={newContent.targetAudience}
-                          onValueChange={(v: any) => setNewContent({ ...newContent, targetAudience: v })}
-                        >
-                          <SelectTrigger><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="all">All Users</SelectItem>
-                            <SelectItem value="general">General Public</SelectItem>
-                            <SelectItem value="health_workers">Health Workers</SelectItem>
-                            <SelectItem value="community_leaders">Community Leaders</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-                  </div>
-                  <DialogFooter>
-                    <Button variant="outline" onClick={() => setIsCreateOpen(false)} disabled={isSaving}>
-                      Cancel
-                    </Button>
-                    <Button onClick={handleCreateContent} disabled={isSaving || isUploading}>
-                      {(isSaving || isUploading) && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                      {isUploading ? 'Uploading...' : isSaving ? 'Creating...' : 'Create Content'}
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
-            )}
-          </div>
 
-          {/* Awareness Content from Firebase (synced with App) */}
-          {awarenessContent.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Megaphone className="h-5 w-5" />
-                  Community Awareness ({awarenessContent.length})
-                </CardTitle>
-                <CardDescription>Content synced with the Flutter mobile app</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                  {awarenessContent.map((item) => (
-                    <div key={item.id} className="p-4 border rounded-lg">
-                      {item.imageUrl && (
-                        <img 
-                          src={item.imageUrl} 
-                          alt={item.title}
-                          className="w-full h-32 object-cover rounded mb-3"
-                        />
-                      )}
-                      <div className="flex items-start justify-between mb-2">
-                        <h3 className="font-semibold">{item.title}</h3>
-                        {canWriteContent && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="text-red-600"
-                            onClick={() => handleDeleteContent(item.id!)}
+            <Tabs defaultValue="en" className="w-full">
+              <TabsList>
+                <TabsTrigger value="en">English</TabsTrigger>
+                <TabsTrigger value="hi">हिन्दी</TabsTrigger>
+              </TabsList>
+
+              {/* English Content */}
+              <TabsContent value="en" className="space-y-8">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2"><Info className="h-5 w-5" /> Guides</CardTitle>
+                    <CardDescription>Simple, practical steps for households</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid gap-4 md:grid-cols-3">
+                      {guides.map((g) => (
+                        <div key={g.id} className="p-4 border rounded-lg">
+                          <h3 className="font-semibold mb-1">{g.title_en}</h3>
+                          <p className="text-sm text-muted-foreground">{g.content_en}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2"><PlayCircle className="h-5 w-5" /> Videos</CardTitle>
+                    <CardDescription>Short explainers you can share</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid gap-6 md:grid-cols-2">
+                      {videos.map((v) => (
+                        <div key={v.id}>
+                          <AspectRatio ratio={16 / 9} className="bg-muted">
+                            {v.embed ? (
+                              <iframe
+                                src={v.embed}
+                                title={v.title_en}
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                allowFullScreen
+                                loading="lazy"
+                                referrerPolicy="strict-origin-when-cross-origin"
+                                className="w-full h-full rounded-md"
+                              />
+                            ) : (
+                              <a href={v.watch} aria-label={`Watch ${v.title_en} on YouTube`} className="relative block w-full h-full group">
+                                <img src={v.thumb} alt={v.title_en} className="w-full h-full object-cover rounded-md" />
+                                <div className="absolute inset-0 flex items-center justify-center">
+                                  <span className="inline-flex items-center gap-2 rounded-full bg-black/60 text-white px-4 py-2 text-sm opacity-90 group-hover:opacity-100 transition">
+                                    <PlayCircle className="h-5 w-5" />
+                                    Play
+                                  </span>
+                                </div>
+                              </a>
+                            )}
+                          </AspectRatio>
+                          <p className="mt-2 text-sm font-medium">{v.title_en}</p>
+                          <a
+                            href={v.watch}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs text-primary hover:underline"
                           >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        )}
-                      </div>
-                      <p className="text-sm text-muted-foreground mb-2 line-clamp-3">{item.content}</p>
-                      <div className="flex gap-2">
-                        <Badge variant="secondary" className="text-xs">{item.category}</Badge>
-                        {item.targetAudience && (
-                          <Badge variant="outline" className="text-xs">{item.targetAudience}</Badge>
-                        )}
-                      </div>
+                            Watch on YouTube
+                          </a>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
+                  </CardContent>
+                </Card>
 
-          <Tabs defaultValue="en" className="w-full">
-            <TabsList>
-              <TabsTrigger value="en">English</TabsTrigger>
-              <TabsTrigger value="hi">हिन्दी</TabsTrigger>
-            </TabsList>
-
-            {/* English Content */}
-            <TabsContent value="en" className="space-y-8">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2"><Info className="h-5 w-5" /> Guides</CardTitle>
-                  <CardDescription>Simple, practical steps for households</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid gap-4 md:grid-cols-3">
-                    {guides.map((g) => (
-                      <div key={g.id} className="p-4 border rounded-lg">
-                        <h3 className="font-semibold mb-1">{g.title_en}</h3>
-                        <p className="text-sm text-muted-foreground">{g.content_en}</p>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2"><PlayCircle className="h-5 w-5" /> Videos</CardTitle>
-                  <CardDescription>Short explainers you can share</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid gap-6 md:grid-cols-2">
-                    {videos.map((v) => (
-                      <div key={v.id}>
-                        <AspectRatio ratio={16 / 9} className="bg-muted">
-                          {v.embed ? (
-                            <iframe
-                              src={v.embed}
-                              title={v.title_en}
-                              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                              allowFullScreen
-                              loading="lazy"
-                              referrerPolicy="strict-origin-when-cross-origin"
-                              className="w-full h-full rounded-md"
-                            />
-                          ) : (
-                            <a href={v.watch} aria-label={`Watch ${v.title_en} on YouTube`} className="relative block w-full h-full group">
-                              <img src={v.thumb} alt={v.title_en} className="w-full h-full object-cover rounded-md" />
-                              <div className="absolute inset-0 flex items-center justify-center">
-                                <span className="inline-flex items-center gap-2 rounded-full bg-black/60 text-white px-4 py-2 text-sm opacity-90 group-hover:opacity-100 transition">
-                                  <PlayCircle className="h-5 w-5" />
-                                  Play
-                                </span>
-                              </div>
-                            </a>
-                          )}
-                        </AspectRatio>
-                        <p className="mt-2 text-sm font-medium">{v.title_en}</p>
-                        <a
-                          href={v.watch}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-xs text-primary hover:underline"
-                        >
-                          Watch on YouTube
-                        </a>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2"><BookOpen className="h-5 w-5" /> Infographics</CardTitle>
-                  <CardDescription>Visual references for awareness</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid gap-4 md:grid-cols-2">
-                    {infographics.map((i) => (
-                      <Dialog key={i.id}>
-                        <DialogTrigger asChild>
-                          <button className="p-3 border rounded-lg text-left hover:bg-muted/40 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                            <img src={i.img} alt={i.title_en} className="w-full h-40 object-contain rounded bg-muted p-1" />
-                            <p className="mt-2 text-sm font-medium">{i.title_en}</p>
-                            <p className="text-xs text-muted-foreground">Click to view steps</p>
-                          </button>
-                        </DialogTrigger>
-                        <DialogContent className="max-w-2xl">
-                          <DialogHeader>
-                            <DialogTitle>{i.title_en}</DialogTitle>
-                            <DialogDescription>Step-by-step guide</DialogDescription>
-                          </DialogHeader>
-                          <div className="space-y-4">
-                            <img src={i.img} alt={i.title_en} className="w-full h-48 object-contain rounded bg-muted p-1" />
-                            {/* Visual reference icons */}
-                            {i.id === 1 && (
-                              <div>
-                                <p className="text-sm font-medium mb-2">Visual reference</p>
-                                <div className="grid grid-cols-5 gap-3 text-center">
-                                  <div className="rounded-xl border bg-muted/50 p-3">
-                                    <div className="mx-auto mb-2 flex h-8 w-8 items-center justify-center rounded-full bg-sky-100 text-sky-600">
-                                      <Droplet className="h-4 w-4" />
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2"><BookOpen className="h-5 w-5" /> Infographics</CardTitle>
+                    <CardDescription>Visual references for awareness</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid gap-4 md:grid-cols-2">
+                      {infographics.map((i) => (
+                        <Dialog key={i.id}>
+                          <DialogTrigger asChild>
+                            <button className="p-3 border rounded-lg text-left hover:bg-muted/40 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                              <img src={i.img} alt={i.title_en} className="w-full h-40 object-contain rounded bg-muted p-1" />
+                              <p className="mt-2 text-sm font-medium">{i.title_en}</p>
+                              <p className="text-xs text-muted-foreground">Click to view steps</p>
+                            </button>
+                          </DialogTrigger>
+                          <DialogContent className="max-w-2xl">
+                            <DialogHeader>
+                              <DialogTitle>{i.title_en}</DialogTitle>
+                              <DialogDescription>Step-by-step guide</DialogDescription>
+                            </DialogHeader>
+                            <div className="space-y-4">
+                              <img src={i.img} alt={i.title_en} className="w-full h-48 object-contain rounded bg-muted p-1" />
+                              {/* Visual reference icons */}
+                              {i.id === 1 && (
+                                <div>
+                                  <p className="text-sm font-medium mb-2">Visual reference</p>
+                                  <div className="grid grid-cols-5 gap-3 text-center">
+                                    <div className="rounded-xl border bg-muted/50 p-3">
+                                      <div className="mx-auto mb-2 flex h-8 w-8 items-center justify-center rounded-full bg-sky-100 text-sky-600">
+                                        <Droplet className="h-4 w-4" />
+                                      </div>
+                                      <p className="text-xs">Collect</p>
                                     </div>
-                                    <p className="text-xs">Collect</p>
-                                  </div>
-                                  <div className="rounded-xl border bg-muted/50 p-3">
-                                    <div className="mx-auto mb-2 flex h-8 w-8 items-center justify-center rounded-full bg-amber-100 text-amber-600">
-                                      <Flame className="h-4 w-4" />
+                                    <div className="rounded-xl border bg-muted/50 p-3">
+                                      <div className="mx-auto mb-2 flex h-8 w-8 items-center justify-center rounded-full bg-amber-100 text-amber-600">
+                                        <Flame className="h-4 w-4" />
+                                      </div>
+                                      <p className="text-xs">Boil</p>
                                     </div>
-                                    <p className="text-xs">Boil</p>
-                                  </div>
-                                  <div className="rounded-xl border bg-muted/50 p-3">
-                                    <div className="mx-auto mb-2 flex h-8 w-8 items-center justify-center rounded-full bg-teal-100 text-teal-600">
-                                      <ShieldCheck className="h-4 w-4" />
+                                    <div className="rounded-xl border bg-muted/50 p-3">
+                                      <div className="mx-auto mb-2 flex h-8 w-8 items-center justify-center rounded-full bg-teal-100 text-teal-600">
+                                        <ShieldCheck className="h-4 w-4" />
+                                      </div>
+                                      <p className="text-xs">Cover</p>
                                     </div>
-                                    <p className="text-xs">Cover</p>
-                                  </div>
-                                  <div className="rounded-xl border bg-muted/50 p-3">
-                                    <div className="mx-auto mb-2 flex h-8 w-8 items-center justify-center rounded-full bg-violet-100 text-violet-600">
-                                      <Filter className="h-4 w-4" />
+                                    <div className="rounded-xl border bg-muted/50 p-3">
+                                      <div className="mx-auto mb-2 flex h-8 w-8 items-center justify-center rounded-full bg-violet-100 text-violet-600">
+                                        <Filter className="h-4 w-4" />
+                                      </div>
+                                      <p className="text-xs">Filter</p>
                                     </div>
-                                    <p className="text-xs">Filter</p>
-                                  </div>
-                                  <div className="rounded-xl border bg-muted/50 p-3">
-                                    <div className="mx-auto mb-2 flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-600">
-                                      <Package className="h-4 w-4" />
+                                    <div className="rounded-xl border bg-muted/50 p-3">
+                                      <div className="mx-auto mb-2 flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-600">
+                                        <Package className="h-4 w-4" />
+                                      </div>
+                                      <p className="text-xs">Store</p>
                                     </div>
-                                    <p className="text-xs">Store</p>
                                   </div>
                                 </div>
-                              </div>
-                            )}
-                            {i.id === 2 && (
-                              <div>
-                                <p className="text-sm font-medium mb-2">Visual reference</p>
-                                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 text-center">
-                                  <div className="rounded-xl border bg-muted/50 p-3">
-                                    <div className="mx-auto mb-2 flex h-8 w-8 items-center justify-center rounded-full bg-sky-100 text-sky-600">
-                                      <Droplet className="h-4 w-4" />
+                              )}
+                              {i.id === 2 && (
+                                <div>
+                                  <p className="text-sm font-medium mb-2">Visual reference</p>
+                                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 text-center">
+                                    <div className="rounded-xl border bg-muted/50 p-3">
+                                      <div className="mx-auto mb-2 flex h-8 w-8 items-center justify-center rounded-full bg-sky-100 text-sky-600">
+                                        <Droplet className="h-4 w-4" />
+                                      </div>
+                                      <p className="text-xs">Cholera</p>
                                     </div>
-                                    <p className="text-xs">Cholera</p>
-                                  </div>
-                                  <div className="rounded-xl border bg-muted/50 p-3">
-                                    <div className="mx-auto mb-2 flex h-8 w-8 items-center justify-center rounded-full bg-amber-100 text-amber-600">
-                                      <AlertTriangle className="h-4 w-4" />
+                                    <div className="rounded-xl border bg-muted/50 p-3">
+                                      <div className="mx-auto mb-2 flex h-8 w-8 items-center justify-center rounded-full bg-amber-100 text-amber-600">
+                                        <AlertTriangle className="h-4 w-4" />
+                                      </div>
+                                      <p className="text-xs">Typhoid Fever</p>
                                     </div>
-                                    <p className="text-xs">Typhoid Fever</p>
-                                  </div>
-                                  <div className="rounded-xl border bg-muted/50 p-3">
-                                    <div className="mx-auto mb-2 flex h-8 w-8 items-center justify-center rounded-full bg-rose-100 text-rose-600">
-                                      <Thermometer className="h-4 w-4" />
+                                    <div className="rounded-xl border bg-muted/50 p-3">
+                                      <div className="mx-auto mb-2 flex h-8 w-8 items-center justify-center rounded-full bg-rose-100 text-rose-600">
+                                        <Thermometer className="h-4 w-4" />
+                                      </div>
+                                      <p className="text-xs">Diarrhea</p>
                                     </div>
-                                    <p className="text-xs">Diarrhea</p>
-                                  </div>
-                                  <div className="rounded-xl border bg-muted/50 p-3">
-                                    <div className="mx-auto mb-2 flex h-8 w-8 items-center justify-center rounded-full bg-blue-100 text-blue-600">
-                                      <ShieldCheck className="h-4 w-4" />
+                                    <div className="rounded-xl border bg-muted/50 p-3">
+                                      <div className="mx-auto mb-2 flex h-8 w-8 items-center justify-center rounded-full bg-blue-100 text-blue-600">
+                                        <ShieldCheck className="h-4 w-4" />
+                                      </div>
+                                      <p className="text-xs">Giardia</p>
                                     </div>
-                                    <p className="text-xs">Giardia</p>
-                                  </div>
-                                  <div className="rounded-xl border bg-muted/50 p-3">
-                                    <div className="mx-auto mb-2 flex h-8 w-8 items-center justify-center rounded-full bg-indigo-100 text-indigo-600">
-                                      <ShieldCheck className="h-4 w-4" />
+                                    <div className="rounded-xl border bg-muted/50 p-3">
+                                      <div className="mx-auto mb-2 flex h-8 w-8 items-center justify-center rounded-full bg-indigo-100 text-indigo-600">
+                                        <ShieldCheck className="h-4 w-4" />
+                                      </div>
+                                      <p className="text-xs">Botulism</p>
                                     </div>
-                                    <p className="text-xs">Botulism</p>
-                                  </div>
-                                </div>
-                              </div>
-                            )}
-                            <ol className="list-decimal pl-5 space-y-2">
-                              {i.steps_en.map((s: string, idx: number) => (
-                                <li key={idx} className="text-sm leading-relaxed">{s}</li>
-                              ))}
-                            </ol>
-                          </div>
-                        </DialogContent>
-                      </Dialog>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            {/* Hindi Content */}
-            <TabsContent value="hi" className="space-y-8">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2"><Info className="h-5 w-5" /> गाइड्स</CardTitle>
-                  <CardDescription>घरों के लिए सरल और व्यावहारिक उपाय</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid gap-4 md:grid-cols-3">
-                    {guides.map((g) => (
-                      <div key={g.id} className="p-4 border rounded-lg">
-                        <h3 className="font-semibold mb-1">{g.title_hi}</h3>
-                        <p className="text-sm text-muted-foreground">{g.content_hi}</p>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2"><PlayCircle className="h-5 w-5" /> वीडियो</CardTitle>
-                  <CardDescription>संक्षिप्त समझाने वाले वीडियो जिन्हें आप शेयर कर सकते हैं</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid gap-6 md:grid-cols-2">
-                    {videos.map((v) => (
-                      <div key={v.id}>
-                        <AspectRatio ratio={16 / 9} className="bg-muted">
-                          {v.embed ? (
-                            <iframe
-                              src={v.embed}
-                              title={v.title_hi}
-                              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                              allowFullScreen
-                              loading="lazy"
-                              referrerPolicy="strict-origin-when-cross-origin"
-                              className="w-full h-full rounded-md"
-                            />
-                          ) : (
-                            <a href={v.watch} aria-label={`YouTube पर देखें: ${v.title_hi}`} className="relative block w-full h-full group">
-                              <img src={v.thumb} alt={v.title_hi} className="w-full h-full object-cover rounded-md" />
-                              <div className="absolute inset-0 flex items-center justify-center">
-                                <span className="inline-flex items-center gap-2 rounded-full bg-black/60 text-white px-4 py-2 text-sm opacity-90 group-hover:opacity-100 transition">
-                                  <PlayCircle className="h-5 w-5" />
-                                  प्ले
-                                </span>
-                              </div>
-                            </a>
-                          )}
-                        </AspectRatio>
-                        <p className="mt-2 text-sm font-medium">{v.title_hi}</p>
-                        <a
-                          href={v.watch}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-xs text-primary hover:underline"
-                        >
-                          YouTube पर देखें
-                        </a>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2"><BookOpen className="h-5 w-5" /> इन्फोग्राफिक्स</CardTitle>
-                  <CardDescription>जागरूकता के लिए दृश्य संदर्भ</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid gap-4 md:grid-cols-2">
-                    {infographics.map((i) => (
-                      <Dialog key={i.id}>
-                        <DialogTrigger asChild>
-                          <button className="p-3 border rounded-lg text-left hover:bg-muted/40 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                            <img src={i.img} alt={i.title_hi} className="w-full h-40 object-contain rounded bg-muted p-1" />
-                            <p className="mt-2 text-sm font-medium">{i.title_hi}</p>
-                            <p className="text-xs text-muted-foreground">स्टेप्स देखने के लिए क्लिक करें</p>
-                          </button>
-                        </DialogTrigger>
-                        <DialogContent className="max-w-2xl">
-                          <DialogHeader>
-                            <DialogTitle>{i.title_hi}</DialogTitle>
-                            <DialogDescription>कदम-दर-कदम मार्गदर्शिका</DialogDescription>
-                          </DialogHeader>
-                          <div className="space-y-4">
-                            <img src={i.img} alt={i.title_hi} className="w-full h-48 object-contain rounded bg-muted p-1" />
-                            {/* Visual reference icons */}
-                            {i.id === 1 && (
-                              <div>
-                                <p className="text-sm font-medium mb-2">दृश्य संदर्भ</p>
-                                <div className="grid grid-cols-5 gap-3 text-center">
-                                  <div className="rounded-xl border bg-muted/50 p-3">
-                                    <div className="mx-auto mb-2 flex h-8 w-8 items-center justify-center rounded-full bg-sky-100 text-sky-600">
-                                      <Droplet className="h-4 w-4" />
-                                    </div>
-                                    <p className="text-xs">संग्रह</p>
-                                  </div>
-                                  <div className="rounded-xl border bg-muted/50 p-3">
-                                    <div className="mx-auto mb-2 flex h-8 w-8 items-center justify-center rounded-full bg-amber-100 text-amber-600">
-                                      <Flame className="h-4 w-4" />
-                                    </div>
-                                    <p className="text-xs">उबालें</p>
-                                  </div>
-                                  <div className="rounded-xl border bg-muted/50 p-3">
-                                    <div className="mx-auto mb-2 flex h-8 w-8 items-center justify-center rounded-full bg-teal-100 text-teal-600">
-                                      <ShieldCheck className="h-4 w-4" />
-                                    </div>
-                                    <p className="text-xs">ढकें</p>
-                                  </div>
-                                  <div className="rounded-xl border bg-muted/50 p-3">
-                                    <div className="mx-auto mb-2 flex h-8 w-8 items-center justify-center rounded-full bg-violet-100 text-violet-600">
-                                      <Filter className="h-4 w-4" />
-                                    </div>
-                                    <p className="text-xs">फ़िल्टर</p>
-                                  </div>
-                                  <div className="rounded-xl border bg-muted/50 p-3">
-                                    <div className="mx-auto mb-2 flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-600">
-                                      <Package className="h-4 w-4" />
-                                    </div>
-                                    <p className="text-xs">भंडारण</p>
                                   </div>
                                 </div>
-                              </div>
+                              )}
+                              <ol className="list-decimal pl-5 space-y-2">
+                                {i.steps_en.map((s: string, idx: number) => (
+                                  <li key={idx} className="text-sm leading-relaxed">{s}</li>
+                                ))}
+                              </ol>
+                            </div>
+                          </DialogContent>
+                        </Dialog>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              {/* Hindi Content */}
+              <TabsContent value="hi" className="space-y-8">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2"><Info className="h-5 w-5" /> गाइड्स</CardTitle>
+                    <CardDescription>घरों के लिए सरल और व्यावहारिक उपाय</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid gap-4 md:grid-cols-3">
+                      {guides.map((g) => (
+                        <div key={g.id} className="p-4 border rounded-lg">
+                          <h3 className="font-semibold mb-1">{g.title_hi}</h3>
+                          <p className="text-sm text-muted-foreground">{g.content_hi}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2"><PlayCircle className="h-5 w-5" /> वीडियो</CardTitle>
+                    <CardDescription>संक्षिप्त समझाने वाले वीडियो जिन्हें आप शेयर कर सकते हैं</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid gap-6 md:grid-cols-2">
+                      {videos.map((v) => (
+                        <div key={v.id}>
+                          <AspectRatio ratio={16 / 9} className="bg-muted">
+                            {v.embed ? (
+                              <iframe
+                                src={v.embed}
+                                title={v.title_hi}
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                allowFullScreen
+                                loading="lazy"
+                                referrerPolicy="strict-origin-when-cross-origin"
+                                className="w-full h-full rounded-md"
+                              />
+                            ) : (
+                              <a href={v.watch} aria-label={`YouTube पर देखें: ${v.title_hi}`} className="relative block w-full h-full group">
+                                <img src={v.thumb} alt={v.title_hi} className="w-full h-full object-cover rounded-md" />
+                                <div className="absolute inset-0 flex items-center justify-center">
+                                  <span className="inline-flex items-center gap-2 rounded-full bg-black/60 text-white px-4 py-2 text-sm opacity-90 group-hover:opacity-100 transition">
+                                    <PlayCircle className="h-5 w-5" />
+                                    प्ले
+                                  </span>
+                                </div>
+                              </a>
                             )}
-                            {i.id === 2 && (
-                              <div>
-                                <p className="text-sm font-medium mb-2">दृश्य संदर्भ</p>
-                                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 text-center">
-                                  <div className="rounded-xl border bg-muted/50 p-3">
-                                    <div className="mx-auto mb-2 flex h-8 w-8 items-center justify-center rounded-full bg-sky-100 text-sky-600">
-                                      <Droplet className="h-4 w-4" />
+                          </AspectRatio>
+                          <p className="mt-2 text-sm font-medium">{v.title_hi}</p>
+                          <a
+                            href={v.watch}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs text-primary hover:underline"
+                          >
+                            YouTube पर देखें
+                          </a>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2"><BookOpen className="h-5 w-5" /> इन्फोग्राफिक्स</CardTitle>
+                    <CardDescription>जागरूकता के लिए दृश्य संदर्भ</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid gap-4 md:grid-cols-2">
+                      {infographics.map((i) => (
+                        <Dialog key={i.id}>
+                          <DialogTrigger asChild>
+                            <button className="p-3 border rounded-lg text-left hover:bg-muted/40 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                              <img src={i.img} alt={i.title_hi} className="w-full h-40 object-contain rounded bg-muted p-1" />
+                              <p className="mt-2 text-sm font-medium">{i.title_hi}</p>
+                              <p className="text-xs text-muted-foreground">स्टेप्स देखने के लिए क्लिक करें</p>
+                            </button>
+                          </DialogTrigger>
+                          <DialogContent className="max-w-2xl">
+                            <DialogHeader>
+                              <DialogTitle>{i.title_hi}</DialogTitle>
+                              <DialogDescription>कदम-दर-कदम मार्गदर्शिका</DialogDescription>
+                            </DialogHeader>
+                            <div className="space-y-4">
+                              <img src={i.img} alt={i.title_hi} className="w-full h-48 object-contain rounded bg-muted p-1" />
+                              {/* Visual reference icons */}
+                              {i.id === 1 && (
+                                <div>
+                                  <p className="text-sm font-medium mb-2">दृश्य संदर्भ</p>
+                                  <div className="grid grid-cols-5 gap-3 text-center">
+                                    <div className="rounded-xl border bg-muted/50 p-3">
+                                      <div className="mx-auto mb-2 flex h-8 w-8 items-center justify-center rounded-full bg-sky-100 text-sky-600">
+                                        <Droplet className="h-4 w-4" />
+                                      </div>
+                                      <p className="text-xs">संग्रह</p>
                                     </div>
-                                    <p className="text-xs">हैजा</p>
-                                  </div>
-                                  <div className="rounded-xl border bg-muted/50 p-3">
-                                    <div className="mx-auto mb-2 flex h-8 w-8 items-center justify-center rounded-full bg-amber-100 text-amber-600">
-                                      <AlertTriangle className="h-4 w-4" />
+                                    <div className="rounded-xl border bg-muted/50 p-3">
+                                      <div className="mx-auto mb-2 flex h-8 w-8 items-center justify-center rounded-full bg-amber-100 text-amber-600">
+                                        <Flame className="h-4 w-4" />
+                                      </div>
+                                      <p className="text-xs">उबालें</p>
                                     </div>
-                                    <p className="text-xs">टाइफाइड बुखार</p>
-                                  </div>
-                                  <div className="rounded-xl border bg-muted/50 p-3">
-                                    <div className="mx-auto mb-2 flex h-8 w-8 items-center justify-center rounded-full bg-rose-100 text-rose-600">
-                                      <Thermometer className="h-4 w-4" />
+                                    <div className="rounded-xl border bg-muted/50 p-3">
+                                      <div className="mx-auto mb-2 flex h-8 w-8 items-center justify-center rounded-full bg-teal-100 text-teal-600">
+                                        <ShieldCheck className="h-4 w-4" />
+                                      </div>
+                                      <p className="text-xs">ढकें</p>
                                     </div>
-                                    <p className="text-xs">दस्त</p>
-                                  </div>
-                                  <div className="rounded-xl border bg-muted/50 p-3">
-                                    <div className="mx-auto mb-2 flex h-8 w-8 itemscenter justify-center rounded-full bg-blue-100 text-blue-600">
-                                      <ShieldCheck className="h-4 w-4" />
+                                    <div className="rounded-xl border bg-muted/50 p-3">
+                                      <div className="mx-auto mb-2 flex h-8 w-8 items-center justify-center rounded-full bg-violet-100 text-violet-600">
+                                        <Filter className="h-4 w-4" />
+                                      </div>
+                                      <p className="text-xs">फ़िल्टर</p>
                                     </div>
-                                    <p className="text-xs">जिआर्डिया</p>
-                                  </div>
-                                  <div className="rounded-xl border bg-muted/50 p-3">
-                                    <div className="mx-auto mb-2 flex h-8 w-8 items-center justify-center rounded-full bg-indigo-100 text-indigo-600">
-                                      <ShieldCheck className="h-4 w-4" />
+                                    <div className="rounded-xl border bg-muted/50 p-3">
+                                      <div className="mx-auto mb-2 flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-600">
+                                        <Package className="h-4 w-4" />
+                                      </div>
+                                      <p className="text-xs">भंडारण</p>
                                     </div>
-                                    <p className="text-xs">बोटुलिज़्म</p>
                                   </div>
                                 </div>
-                              </div>
-                            )}
-                            <ol className="list-decimal pl-5 space-y-2">
-                              {i.steps_hi.map((s: string, idx: number) => (
-                                <li key={idx} className="text-sm leading-relaxed">{s}</li>
-                              ))}
-                            </ol>
-                          </div>
-                        </DialogContent>
-                      </Dialog>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
-          </Tabs>
+                              )}
+                              {i.id === 2 && (
+                                <div>
+                                  <p className="text-sm font-medium mb-2">दृश्य संदर्भ</p>
+                                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 text-center">
+                                    <div className="rounded-xl border bg-muted/50 p-3">
+                                      <div className="mx-auto mb-2 flex h-8 w-8 items-center justify-center rounded-full bg-sky-100 text-sky-600">
+                                        <Droplet className="h-4 w-4" />
+                                      </div>
+                                      <p className="text-xs">हैजा</p>
+                                    </div>
+                                    <div className="rounded-xl border bg-muted/50 p-3">
+                                      <div className="mx-auto mb-2 flex h-8 w-8 items-center justify-center rounded-full bg-amber-100 text-amber-600">
+                                        <AlertTriangle className="h-4 w-4" />
+                                      </div>
+                                      <p className="text-xs">टाइफाइड बुखार</p>
+                                    </div>
+                                    <div className="rounded-xl border bg-muted/50 p-3">
+                                      <div className="mx-auto mb-2 flex h-8 w-8 items-center justify-center rounded-full bg-rose-100 text-rose-600">
+                                        <Thermometer className="h-4 w-4" />
+                                      </div>
+                                      <p className="text-xs">दस्त</p>
+                                    </div>
+                                    <div className="rounded-xl border bg-muted/50 p-3">
+                                      <div className="mx-auto mb-2 flex h-8 w-8 itemscenter justify-center rounded-full bg-blue-100 text-blue-600">
+                                        <ShieldCheck className="h-4 w-4" />
+                                      </div>
+                                      <p className="text-xs">जिआर्डिया</p>
+                                    </div>
+                                    <div className="rounded-xl border bg-muted/50 p-3">
+                                      <div className="mx-auto mb-2 flex h-8 w-8 items-center justify-center rounded-full bg-indigo-100 text-indigo-600">
+                                        <ShieldCheck className="h-4 w-4" />
+                                      </div>
+                                      <p className="text-xs">बोटुलिज़्म</p>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                              <ol className="list-decimal pl-5 space-y-2">
+                                {i.steps_hi.map((s: string, idx: number) => (
+                                  <li key={idx} className="text-sm leading-relaxed">{s}</li>
+                                ))}
+                              </ol>
+                            </div>
+                          </DialogContent>
+                        </Dialog>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            </Tabs>
+          </div>
         </div>
       </DashboardLayout>
-    </RBACAuthGuard>
+    </AuthGuard>
   )
 }

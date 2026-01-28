@@ -48,7 +48,7 @@ export function AuthGuard({ children, allowedRoles }: AuthGuardProps) {
             email: firebaseUser.email || '',
             firstName: firebaseUser.displayName?.split(' ')[0] || '',
             lastName: firebaseUser.displayName?.split(' ').slice(1).join(' ') || '',
-            role: 'user',
+            role: 'community',
             isVerified: true,
             createdAt: null,
             updatedAt: null,

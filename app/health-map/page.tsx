@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { RBACAuthGuard } from "@/components/rbac-auth-guard"
+import { AuthGuard } from "@/components/auth-guard"
 import { DashboardLayout } from "@/components/dashboard-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -9,15 +9,7 @@ import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
 import { MapPin, Activity, Droplets, Hospital, Users, Phone, Navigation, Filter, Loader2 } from "lucide-react"
-import {
-  getHealthReportsForRole,
-  getWaterQualityTestsForRole,
-  getSymptomReportsForRole,
-  type HealthReport,
-  type WaterQualityTest
-} from "@/lib/firestore-service"
-import { getCurrentUserRole } from "@/lib/role-service"
-import { normalizeRole } from "@/lib/rbac/role-utils"
+import { getHealthReports, getWaterQualityTests, getSymptomReports, type HealthReport, type WaterQualityTest } from "@/lib/firestore-service"
 
 // Static health centers (these don't change often)
 const healthCenters = [
@@ -46,7 +38,6 @@ export default function HealthMapPage() {
   const [showHealthCenters, setShowHealthCenters] = useState(true)
   const [severityFilter, setSeverityFilter] = useState("all")
   const [loading, setLoading] = useState(true)
-  const [isAdmin, setIsAdmin] = useState(false)
 
   // Real data from Firestore
   const [healthIncidents, setHealthIncidents] = useState<any[]>([])
@@ -58,16 +49,11 @@ export default function HealthMapPage() {
 
   const loadMapData = async () => {
     try {
-      const [healthReports, waterTests, symptomReports, role] = await Promise.all([
-        getHealthReportsForRole(50),
-        getWaterQualityTestsForRole(50),
-        getSymptomReportsForRole(50),
-        getCurrentUserRole(),
+      const [healthReports, waterTests, symptomReports] = await Promise.all([
+        getHealthReports(50),
+        getWaterQualityTests(50),
+        getSymptomReports(50),
       ])
-
-      // Normalize role for admin check
-      const normalizedRole = normalizeRole(role)
-      setIsAdmin(normalizedRole === 'ADMIN')
 
       // Transform health reports to map markers
       const healthMarkers = [
@@ -85,7 +71,7 @@ export default function HealthMapPage() {
           date: formatDate(r.createdAt),
           population: 1000 + Math.floor(Math.random() * 2000),
         })),
-        ...(symptomReports as any[]).map((r: any, i: number) => ({
+        ...symptomReports.map((r, i) => ({
           id: r.id || `sr-${i}`,
           type: "health" as const,
           village: r.location?.address || r.patientInfo?.name || 'Symptom Report',
@@ -196,18 +182,18 @@ export default function HealthMapPage() {
 
   if (loading) {
     return (
-      <RBACAuthGuard requiredModule="HEALTH_MAPS">
+      <AuthGuard>
         <DashboardLayout>
           <div className="flex items-center justify-center min-h-[60vh]">
             <Loader2 className="h-8 w-8 animate-spin" />
           </div>
         </DashboardLayout>
-      </RBACAuthGuard>
+      </AuthGuard>
     )
   }
 
   return (
-    <RBACAuthGuard requiredModule="HEALTH_REPORTS">
+    <AuthGuard>
       <DashboardLayout>
         <div className="space-y-6">
           {/* Header */}
@@ -564,6 +550,6 @@ export default function HealthMapPage() {
           </div>
         </div>
       </DashboardLayout>
-    </RBACAuthGuard>
+    </AuthGuard>
   )
 }

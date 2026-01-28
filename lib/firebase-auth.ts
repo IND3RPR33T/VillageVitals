@@ -123,7 +123,7 @@ export async function signIn(data: {
 }
 
 // Sign in with Google
-export async function signInWithGoogle(): Promise<{ profile: UserProfile; isNewUser: boolean }> {
+export async function signInWithGoogle(): Promise<{ profile: UserProfile; isNewUser: boolean; idToken: string }> {
     try {
         const provider = new GoogleAuthProvider();
         const result = await signInWithPopup(auth, provider);
@@ -142,9 +142,11 @@ export async function signInWithGoogle(): Promise<{ profile: UserProfile; isNewU
             const isComplete = data.isProfileComplete === true ||
                 !!data.fullName ||
                 !!data.phoneNumber;
+            const idToken = await user.getIdToken();
             return {
                 profile,
-                isNewUser: !isComplete
+                isNewUser: !isComplete,
+                idToken
             };
         }
 
@@ -169,9 +171,12 @@ export async function signInWithGoogle(): Promise<{ profile: UserProfile; isNewU
             isProfileComplete: false, // Mark as incomplete until they fill profile
         });
 
+        const idToken = await user.getIdToken();
+
         return {
             profile: userProfile,
-            isNewUser: true  // New user, needs to complete profile
+            isNewUser: true,  // New user, needs to complete profile
+            idToken
         };
     } catch (error: any) {
         console.error('Google sign in error:', error);

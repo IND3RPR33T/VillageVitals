@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useEffect } from "react"
-import { RBACAuthGuard } from "@/components/rbac-auth-guard"
+import { AuthGuard } from "@/components/auth-guard"
 import { DashboardLayout } from "@/components/dashboard-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -17,11 +17,50 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { format } from "date-fns"
 import { CalendarIcon, Droplets, AlertTriangle, CheckCircle, TrendingUp, Eye, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import Link from "next/link"
 import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Area, AreaChart } from "recharts"
-import { getWaterQualityTestsForRole, type WaterQualityTest } from "@/lib/firestore-service"
-import { getCurrentUserRole } from "@/lib/role-service"
-import { normalizeRole } from "@/lib/rbac/role-utils"
+import { Boxes } from "@/components/ui/background-boxes"
+import GradientText from "@/components/GradientText/GradientText"
+import { MagicCard } from "@/components/ui/magic-card"
+
+// Mock data for water quality trends
+const waterQualityTrends = [
+  { month: "Jan", turbidity: 8.2, nitrate: 12, risk: 15 },
+  { month: "Feb", turbidity: 9.1, nitrate: 20, risk: 18 },
+  { month: "Mar", turbidity: 7.8, nitrate: 10, risk: 12 },
+  { month: "Apr", turbidity: 6.5, nitrate: 15, risk: 8 },
+  { month: "May", turbidity: 8.9, nitrate: 25, risk: 16 },
+  { month: "Jun", turbidity: 5.2, nitrate: 8, risk: 6 },
+]
+
+const recentTests = [
+  {
+    id: 1,
+    location: "Main Well - Kamakhya Village",
+    turbidity: 8.5,
+    nitrate: 12,
+    risk: "low",
+    date: "2024-01-15",
+    tester: "Water Inspector Ram",
+  },
+  {
+    id: 2,
+    location: "River Source - Majuli Village",
+    turbidity: 15.2,
+    nitrate: 28,
+    risk: "moderate",
+    date: "2024-01-14",
+    tester: "Health Worker Priya",
+  },
+  {
+    id: 3,
+    location: "Community Pump - Dibrugarh",
+    turbidity: 22.8,
+    nitrate: 40,
+    risk: "high",
+    date: "2024-01-13",
+    tester: "Dr. Sharma",
+  },
+]
 
 const getRiskColor = (risk: string) => {
   switch (risk) {
@@ -95,68 +134,7 @@ export default function WaterQualityPage() {
   const [isLoadingPrediction, setIsLoadingPrediction] = useState(false)
   const [predictionError, setPredictionError] = useState<string | null>(null)
 
-  // Firebase data
-  const [recentTests, setRecentTests] = useState<WaterQualityTest[]>([])
-  const [waterQualityTrends, setWaterQualityTrends] = useState<any[]>([])
-  const [isAdmin, setIsAdmin] = useState(false)
-  const [loading, setLoading] = useState(true)
-
   const hasValues = coliform && turbidity && bod && cod && nitrate && ammonia
-
-  // Load real data from Firebase
-  useEffect(() => {
-    loadData()
-  }, [])
-
-  const loadData = async () => {
-    try {
-      const [tests, role] = await Promise.all([
-        getWaterQualityTestsForRole(50),
-        getCurrentUserRole(),
-      ])
-      setRecentTests(tests)
-      
-      // Normalize role for admin check
-      const normalizedRole = normalizeRole(role)
-      setIsAdmin(normalizedRole === 'ADMIN')
-
-      // Generate trends from real data
-      const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-      const monthData: Record<string, { turbidity: number[], nitrate: number[], count: number }> = {}
-
-      tests.forEach(t => {
-        try {
-          const d = t.createdAt?.toDate ? t.createdAt.toDate() : new Date(t.createdAt as any)
-          const month = monthNames[d.getMonth()]
-          if (!monthData[month]) monthData[month] = { turbidity: [], nitrate: [], count: 0 }
-          if (t.measurements?.turbidity) monthData[month].turbidity.push(t.measurements.turbidity)
-          if (t.measurements?.nitrate) monthData[month].nitrate.push(t.measurements.nitrate)
-          monthData[month].count++
-        } catch { }
-      })
-
-      const trends = Object.entries(monthData).map(([month, data]) => ({
-        month,
-        turbidity: data.turbidity.length > 0 ? Math.round(data.turbidity.reduce((a, b) => a + b, 0) / data.turbidity.length * 10) / 10 : 0,
-        nitrate: data.nitrate.length > 0 ? Math.round(data.nitrate.reduce((a, b) => a + b, 0) / data.nitrate.length * 10) / 10 : 0,
-        risk: data.count,
-      }))
-
-      setWaterQualityTrends(trends.length > 0 ? trends : [])
-    } catch (error) {
-      console.error('Error loading water tests:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const formatDate = (timestamp: any) => {
-    if (!timestamp) return 'N/A'
-    try {
-      const d = timestamp.toDate ? timestamp.toDate() : new Date(timestamp)
-      return d.toLocaleDateString()
-    } catch { return 'N/A' }
-  }
 
   // Function to get risk prediction from your model
   const getRiskPrediction = async () => {
@@ -310,7 +288,7 @@ export default function WaterQualityPage() {
 
   if (isSubmitted) {
     return (
-      <RBACAuthGuard requiredModule="WATER_QUALITY">
+      <AuthGuard>
         <DashboardLayout>
           <div className="max-w-2xl mx-auto">
             <Card className="text-center animate-slide-up">
@@ -333,411 +311,422 @@ export default function WaterQualityPage() {
             </Card>
           </div>
         </DashboardLayout>
-      </RBACAuthGuard>
+      </AuthGuard>
     )
   }
 
   return (
-    <RBACAuthGuard requiredModule="WATER_QUALITY">
+    <AuthGuard>
       <DashboardLayout>
-        <div className="space-y-8">
-          <div className="animate-fade-in">
-            <h1 className="text-3xl font-bold text-balance">Water Quality Monitoring</h1>
-            <p className="text-muted-foreground mt-2">
-              Monitor and report water quality metrics with AI-powered risk assessment
-            </p>
+        <div className="relative w-full min-h-screen rounded-lg">
+          <div className="fixed inset-0 w-full h-full overflow-hidden pointer-events-none z-0">
+            <Boxes />
           </div>
+          <div className="relative z-50 space-y-8 p-6 pb-20">
+            <div className="animate-fade-in">
+              <GradientText
+                colors={["#0ea5e9", "#22d3ee", "#3b82f6", "#0ea5e9"]} // Water-themed blues/cyans
+                animationSpeed={5}
+                showBorder={false}
+                className="text-3xl font-bold text-balance"
+              >
+                Water Quality Monitoring
+              </GradientText>
+              <GradientText
+                colors={["#a5f3fc", "#cffafe", "#e0f2fe", "#a5f3fc"]} // Very light cyan/sky for subtitle
+                animationSpeed={8}
+                showBorder={false}
+                className="text-sm mt-2"
+              >
+                Monitor and report water quality metrics with AI-powered risk assessment
+              </GradientText>
+            </div>
 
-          <Tabs defaultValue="submit" className="space-y-6">
-            <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="submit">Submit Test</TabsTrigger>
-              <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
-              <TabsTrigger value="history">Test History</TabsTrigger>
-            </TabsList>
+            <Tabs defaultValue="submit" className="space-y-6">
+              <TabsList className="grid w-full grid-cols-3">
+                <TabsTrigger value="submit">Submit Test</TabsTrigger>
+                <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
+                <TabsTrigger value="history">Test History</TabsTrigger>
+              </TabsList>
 
-            {/* Submit Test */}
-            <TabsContent value="submit" className="space-y-8">
-              <form onSubmit={handleSubmit} className="max-w-4xl space-y-8">
-                <Card className="animate-slide-up">
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Droplets className="h-5 w-5" />
-                      Water Source Information
-                    </CardTitle>
-                    <CardDescription>Provide details about the water source being tested</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div className="space-y-2">
-                        <Label htmlFor="test-date">Test Date</Label>
-                        <Popover open={isDateOpen} onOpenChange={setIsDateOpen}>
-                          <PopoverTrigger asChild>
-                            <Button
-                              id="test-date"
-                              type="button"
-                              variant="outline"
-                              className={cn(
-                                "w-full justify-start text-left font-normal",
-                                !date && "text-muted-foreground",
-                              )}
-                            >
-                              <CalendarIcon className="mr-2 h-4 w-4" />
-                              {date ? format(date, "PPP") : "Select test date"}
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0">
-                            <Calendar
-                              mode="single"
-                              selected={date}
-                              onSelect={(d) => {
+              {/* Submit Test */}
+              <TabsContent value="submit" className="space-y-8">
+                <form onSubmit={handleSubmit} className="max-w-4xl mx-auto space-y-8">
+                  <MagicCard
+                    className="animate-slide-up p-5 flex flex-col gap-5"
+                    gradientColor="#262626"
+                    gradientOpacity={0.1}
+                    gradientFrom="#0ea5e9"
+                    gradientTo="#3b82f6"
+                  >
+                    <CardHeader className="p-0">
+                      <CardTitle className="flex items-center gap-2">
+                        <Droplets className="h-5 w-5" />
+                        Water Source Information
+                      </CardTitle>
+                      <CardDescription>Provide details about the water source being tested</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-6 p-0">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="space-y-2">
+                          <Label htmlFor="test-date">Test Date</Label>
+                          <Popover open={isDateOpen} onOpenChange={setIsDateOpen}>
+                            <PopoverTrigger asChild>
+                              <Button
+                                id="test-date"
+                                type="button"
+                                variant="outline"
+                                className={cn(
+                                  "w-full justify-start text-left font-normal",
+                                  !date && "text-muted-foreground",
+                                )}
+                              >
+                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                {date ? format(date, "PPP") : "Select test date"}
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0">
+                              <Calendar
+                                mode="single"
+                                selected={date}
+                                onSelect={(d) => {
+                                  setDate(d)
+                                  if (d) setIsDateOpen(false)
+                                }}
+                                onDayClick={(d) => {
+                                  setDate(d)
+                                  if (d) setIsDateOpen(false)
+                                }}
+                                initialFocus
+                              />
+                            </PopoverContent>
+                          </Popover>
+                          <div className="mt-2">
+                            <Label htmlFor="test-date-native" className="text-xs text-muted-foreground">
+                              Or use native picker
+                            </Label>
+                            <Input
+                              id="test-date-native"
+                              type="date"
+                              value={date ? format(date, "yyyy-MM-dd") : ""}
+                              onChange={(e) => {
+                                const v = e.target.value
+                                if (!v) {
+                                  setDate(undefined)
+                                  return
+                                }
+                                const parts = v.split("-")
+                                const d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]))
                                 setDate(d)
-                                if (d) setIsDateOpen(false)
                               }}
-                              onDayClick={(d) => {
-                                setDate(d)
-                                if (d) setIsDateOpen(false)
-                              }}
-                              initialFocus
                             />
-                          </PopoverContent>
-                        </Popover>
-                        <div className="mt-2">
-                          <Label htmlFor="test-date-native" className="text-xs text-muted-foreground">
-                            Or use native picker
-                          </Label>
+                          </div>
+                          <input type="hidden" name="testDate" value={date ? date.toISOString() : ""} />
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="location">Location/Village</Label>
+                          <Input id="location" placeholder="Enter location or village name" required />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="source-type">Source Type</Label>
+                          <Select value={sourceType} onValueChange={setSourceType}>
+                            <SelectTrigger id="source-type" className="w-full">
+                              <SelectValue placeholder="Select water source type" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="well">Well</SelectItem>
+                              <SelectItem value="river">River</SelectItem>
+                              <SelectItem value="tap">Tap</SelectItem>
+                              <SelectItem value="borehole">Borehole</SelectItem>
+                              <SelectItem value="rainwater">Rainwater</SelectItem>
+                              <SelectItem value="pond">Pond</SelectItem>
+                              <SelectItem value="other">Other</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <input type="hidden" name="sourceType" value={sourceType} required aria-required="true" />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="gps">GPS Coordinates (Optional)</Label>
                           <Input
-                            id="test-date-native"
-                            type="date"
-                            value={date ? format(date, "yyyy-MM-dd") : ""}
-                            onChange={(e) => {
-                              const v = e.target.value
-                              if (!v) {
-                                setDate(undefined)
-                                return
-                              }
-                              const parts = v.split("-")
-                              const d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]))
-                              setDate(d)
-                            }}
+                            id="gps"
+                            name="gps"
+                            placeholder="e.g., 26.1445, 91.7362"
+                            value={gpsCoordinates}
+                            onChange={(e) => setGpsCoordinates(e.target.value)}
+                            pattern={"^-?\\d{1,2}(\\.\\d+)?,\\s*-?\\d{1,3}(\\.\\d+)?$"}
+                            title="Enter coordinates as Latitude, Longitude"
                           />
                         </div>
-                        <input type="hidden" name="testDate" value={date ? date.toISOString() : ""} />
                       </div>
+                    </CardContent>
+                  </MagicCard>
 
-                      <div className="space-y-2">
-                        <Label htmlFor="location">Location/Village</Label>
-                        <Input id="location" placeholder="Enter location or village name" required />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="source-type">Source Type</Label>
-                        <Select value={sourceType} onValueChange={setSourceType}>
-                          <SelectTrigger id="source-type" className="w-full">
-                            <SelectValue placeholder="Select water source type" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="well">Well</SelectItem>
-                            <SelectItem value="river">River</SelectItem>
-                            <SelectItem value="tap">Tap</SelectItem>
-                            <SelectItem value="borehole">Borehole</SelectItem>
-                            <SelectItem value="rainwater">Rainwater</SelectItem>
-                            <SelectItem value="pond">Pond</SelectItem>
-                            <SelectItem value="other">Other</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <input type="hidden" name="sourceType" value={sourceType} required aria-required="true" />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="gps">GPS Coordinates (Optional)</Label>
-                        <Input
-                          id="gps"
-                          name="gps"
-                          placeholder="e.g., 26.1445, 91.7362"
-                          value={gpsCoordinates}
-                          onChange={(e) => setGpsCoordinates(e.target.value)}
-                          pattern={"^-?\\d{1,2}(\\.\\d+)?,\\s*-?\\d{1,3}(\\.\\d+)?$"}
-                          title="Enter coordinates as Latitude, Longitude"
-                        />
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                {/* Water Quality Metrics */}
-                <Card className="animate-slide-up">
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <TrendingUp className="h-5 w-5" />
-                      Quality Measurements
-                    </CardTitle>
-                    <CardDescription>Enter the measured water quality parameters for AI risk assessment</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div className="space-y-2">
-                        <Label htmlFor="coliform">Coliform Bacteria (CFU/mL)</Label>
-                        <Input
-                          id="coliform"
-                          type="number"
-                          value={coliform}
-                          onChange={(e) => setColiform(e.target.value)}
-                          required
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="turbidity">Turbidity (NTU)</Label>
-                        <Input
-                          id="turbidity"
-                          type="number"
-                          step="0.1"
-                          value={turbidity}
-                          onChange={(e) => setTurbidity(e.target.value)}
-                          required
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="bod">BOD (mg/L)</Label>
-                        <Input
-                          id="bod"
-                          type="number"
-                          step="0.1"
-                          value={bod}
-                          onChange={(e) => setBod(e.target.value)}
-                          required
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="cod">COD (mg/L)</Label>
-                        <Input
-                          id="cod"
-                          type="number"
-                          step="0.1"
-                          value={cod}
-                          onChange={(e) => setCod(e.target.value)}
-                          required
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="nitrate">Nitrate (NO₃⁻) (mg/L)</Label>
-                        <Input
-                          id="nitrate"
-                          type="number"
-                          step="0.1"
-                          value={nitrate}
-                          onChange={(e) => setNitrate(e.target.value)}
-                          required
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="ammonia">Ammonia (NH₃) (mg/L)</Label>
-                        <Input
-                          id="ammonia"
-                          type="number"
-                          step="0.1"
-                          value={ammonia}
-                          onChange={(e) => setAmmonia(e.target.value)}
-                          required
-                        />
-                      </div>
-                    </div>
-
-                    {/* Risk Indicator */}
-                    {hasValues && (
-                      <div className="p-4 border rounded-lg bg-muted/30">
-                        <div className="flex items-center justify-between mb-3">
-                          <h4 className="font-medium flex items-center gap-2">
-                            AI Risk Assessment
-                            {isLoadingPrediction && <Loader2 className="h-4 w-4 animate-spin" />}
-                          </h4>
-                          {currentRisk && (
-                            <Badge className={getRiskColor(currentRisk.level)}>
-                              {currentRisk.level.toUpperCase()} RISK
-                            </Badge>
-                          )}
+                  {/* Water Quality Metrics */}
+                  <MagicCard
+                    className="animate-slide-up p-6 flex flex-col gap-6"
+                    gradientColor="#262626"
+                    gradientOpacity={0.1}
+                    gradientFrom="#0ea5e9"
+                    gradientTo="#3b82f6"
+                  >
+                    <CardHeader className="p-0">
+                      <CardTitle className="flex items-center gap-2">
+                        <TrendingUp className="h-5 w-5" />
+                        Quality Measurements
+                      </CardTitle>
+                      <CardDescription>Enter the measured water quality parameters for AI risk assessment</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-6 p-0">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="space-y-2">
+                          <Label htmlFor="coliform">Coliform Bacteria (CFU/mL)</Label>
+                          <Input
+                            id="coliform"
+                            type="number"
+                            value={coliform}
+                            onChange={(e) => setColiform(e.target.value)}
+                            required
+                          />
                         </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="turbidity">Turbidity (NTU)</Label>
+                          <Input
+                            id="turbidity"
+                            type="number"
+                            step="0.1"
+                            value={turbidity}
+                            onChange={(e) => setTurbidity(e.target.value)}
+                            required
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="bod">BOD (mg/L)</Label>
+                          <Input
+                            id="bod"
+                            type="number"
+                            step="0.1"
+                            value={bod}
+                            onChange={(e) => setBod(e.target.value)}
+                            required
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="cod">COD (mg/L)</Label>
+                          <Input
+                            id="cod"
+                            type="number"
+                            step="0.1"
+                            value={cod}
+                            onChange={(e) => setCod(e.target.value)}
+                            required
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="nitrate">Nitrate (NO₃⁻) (mg/L)</Label>
+                          <Input
+                            id="nitrate"
+                            type="number"
+                            step="0.1"
+                            value={nitrate}
+                            onChange={(e) => setNitrate(e.target.value)}
+                            required
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="ammonia">Ammonia (NH₃) (mg/L)</Label>
+                          <Input
+                            id="ammonia"
+                            type="number"
+                            step="0.1"
+                            value={ammonia}
+                            onChange={(e) => setAmmonia(e.target.value)}
+                            required
+                          />
+                        </div>
+                      </div>
 
-                        {predictionError && (
-                          <div className="mb-3 text-sm text-yellow-600 bg-yellow-50 p-2 rounded">
-                            ⚠️ {predictionError}
-                          </div>
-                        )}
-
-                        {currentRisk && (
-                          <div className="space-y-2">
-                            <div className="flex justify-between text-sm">
-                              <span>Risk Level</span>
-                              <span>{currentRisk.percentage}%</span>
-                            </div>
-                            <Progress
-                              value={currentRisk.percentage}
-                              className={`h-2 ${currentRisk.color === "green"
-                                ? "[&>div]:bg-green-500"
-                                : currentRisk.color === "yellow"
-                                  ? "[&>div]:bg-yellow-500"
-                                  : "[&>div]:bg-red-500"
-                                }`}
-                            />
-                            {currentRisk.confidence && (
-                              <div className="text-xs text-muted-foreground">
-                                Model Confidence: {currentRisk.confidence}%
-                              </div>
+                      {/* Risk Indicator */}
+                      {hasValues && (
+                        <div className="p-4 border rounded-lg bg-muted/30">
+                          <div className="flex items-center justify-between mb-3">
+                            <h4 className="font-medium flex items-center gap-2">
+                              AI Risk Assessment
+                              {isLoadingPrediction && <Loader2 className="h-4 w-4 animate-spin" />}
+                            </h4>
+                            {currentRisk && (
+                              <Badge className={getRiskColor(currentRisk.level)}>
+                                {currentRisk.level.toUpperCase()} RISK
+                              </Badge>
                             )}
                           </div>
-                        )}
 
-                        {isLoadingPrediction && !currentRisk && (
-                          <div className="text-sm text-muted-foreground flex items-center gap-2">
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                            Analyzing water quality parameters...
-                          </div>
-                        )}
-                      </div>
-                    )}
+                          {predictionError && (
+                            <div className="mb-3 text-sm text-yellow-600 bg-yellow-50 p-2 rounded">
+                              ⚠️ {predictionError}
+                            </div>
+                          )}
 
-                    <div className="space-y-2">
-                      <Label htmlFor="notes">Additional Notes</Label>
-                      <Textarea
-                        id="notes"
-                        placeholder="Any observations, unusual conditions, or additional information..."
-                        rows={3}
-                      />
-                    </div>
-                  </CardContent>
-                </Card>
+                          {currentRisk && (
+                            <div className="space-y-2">
+                              <div className="flex justify-between text-sm">
+                                <span>Risk Level</span>
+                                <span>{currentRisk.percentage}%</span>
+                              </div>
+                              <Progress
+                                value={currentRisk.percentage}
+                                className={`h-2 ${currentRisk.color === "green"
+                                  ? "[&>div]:bg-green-500"
+                                  : currentRisk.color === "yellow"
+                                    ? "[&>div]:bg-yellow-500"
+                                    : "[&>div]:bg-red-500"
+                                  }`}
+                              />
+                              {currentRisk.confidence && (
+                                <div className="text-xs text-muted-foreground">
+                                  Model Confidence: {currentRisk.confidence}%
+                                </div>
+                              )}
+                            </div>
+                          )}
 
-                {/* Submit Button */}
-                <div className="flex justify-end gap-4">
-                  <Button type="button" variant="outline" asChild>
-                    <a href="/dashboard">Cancel</a>
-                  </Button>
-                  <Button type="submit" disabled={isSubmitting} className="min-w-32">
-                    {isSubmitting ? "Submitting..." : "Submit Test Results"}
-                  </Button>
-                </div>
-              </form>
-            </TabsContent>
+                          {isLoadingPrediction && !currentRisk && (
+                            <div className="text-sm text-muted-foreground flex items-center gap-2">
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                              Analyzing water quality parameters...
+                            </div>
+                          )}
+                        </div>
+                      )}
 
-            {/* Dashboard */}
-            <TabsContent value="dashboard" className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <Card className="animate-slide-up">
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Safe Sources</CardTitle>
-                    <CheckCircle className="h-4 w-4 text-green-600" />
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold text-green-600">
-                      {recentTests.length > 0 ? `${Math.round(recentTests.filter(t => t.riskAssessment?.level === 'low').length / recentTests.length * 100)}%` : '0%'}
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      {recentTests.filter(t => t.riskAssessment?.level === 'low').length} out of {recentTests.length} sources
-                    </p>
-                  </CardContent>
-                </Card>
-
-                <Card className="animate-slide-up">
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Moderate Risk</CardTitle>
-                    <AlertTriangle className="h-4 w-4 text-yellow-600" />
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold text-yellow-600">
-                      {recentTests.length > 0 ? `${Math.round(recentTests.filter(t => t.riskAssessment?.level === 'moderate').length / recentTests.length * 100)}%` : '0%'}
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      {recentTests.filter(t => t.riskAssessment?.level === 'moderate').length} sources need monitoring
-                    </p>
-                  </CardContent>
-                </Card>
-
-                <Card className="animate-slide-up">
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">High Risk</CardTitle>
-                    <AlertTriangle className="h-4 w-4 text-red-600" />
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold text-red-600">
-                      {recentTests.length > 0 ? `${Math.round(recentTests.filter(t => t.riskAssessment?.level === 'high').length / recentTests.length * 100)}%` : '0%'}
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      {recentTests.filter(t => t.riskAssessment?.level === 'high').length} sources need immediate action
-                    </p>
-                  </CardContent>
-                </Card>
-              </div>
-
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <Card className="animate-slide-up">
-                  <CardHeader>
-                    <CardTitle>Turbidity Trends</CardTitle>
-                    <CardDescription>Monthly average turbidity levels (NTU)</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <ResponsiveContainer width="100%" height={300}>
-                      <AreaChart data={waterQualityTrends}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="month" />
-                        <YAxis />
-                        <Tooltip />
-                        <Area
-                          type="monotone"
-                          dataKey="turbidity"
-                          stroke="hsl(var(--chart-1))"
-                          fill="hsl(var(--chart-1))"
-                          fillOpacity={0.3}
+                      <div className="space-y-2">
+                        <Label htmlFor="notes">Additional Notes</Label>
+                        <Textarea
+                          id="notes"
+                          placeholder="Any observations, unusual conditions, or additional information..."
+                          rows={3}
                         />
-                      </AreaChart>
-                    </ResponsiveContainer>
-                  </CardContent>
-                </Card>
+                      </div>
+                    </CardContent>
+                  </MagicCard>
 
+                  {/* Submit Button */}
+                  <div className="flex justify-end gap-4">
+                    <Button type="button" variant="outline" asChild>
+                      <a href="/dashboard">Cancel</a>
+                    </Button>
+                    <Button type="submit" disabled={isSubmitting} className="min-w-32">
+                      {isSubmitting ? "Submitting..." : "Submit Test Results"}
+                    </Button>
+                  </div>
+                </form>
+              </TabsContent>
+
+              {/* Dashboard */}
+              <TabsContent value="dashboard" className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <Card className="animate-slide-up">
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium">Safe Sources</CardTitle>
+                      <CheckCircle className="h-4 w-4 text-green-600" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold text-green-600">65%</div>
+                      <p className="text-xs text-muted-foreground">58 out of 89 sources</p>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="animate-slide-up">
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium">Moderate Risk</CardTitle>
+                      <AlertTriangle className="h-4 w-4 text-yellow-600" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold text-yellow-600">25%</div>
+                      <p className="text-xs text-muted-foreground">22 sources need monitoring</p>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="animate-slide-up">
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium">High Risk</CardTitle>
+                      <AlertTriangle className="h-4 w-4 text-red-600" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold text-red-600">10%</div>
+                      <p className="text-xs text-muted-foreground">9 sources need immediate action</p>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <Card className="animate-slide-up">
+                    <CardHeader>
+                      <CardTitle>Turbidity Trends</CardTitle>
+                      <CardDescription>Monthly average turbidity levels (NTU)</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <ResponsiveContainer width="100%" height={300}>
+                        <AreaChart data={waterQualityTrends}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="month" />
+                          <YAxis />
+                          <Tooltip />
+                          <Area
+                            type="monotone"
+                            dataKey="turbidity"
+                            stroke="hsl(var(--chart-1))"
+                            fill="hsl(var(--chart-1))"
+                            fillOpacity={0.3}
+                          />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="animate-slide-up">
+                    <CardHeader>
+                      <CardTitle>Nitrate Trends</CardTitle>
+                      <CardDescription>Monthly average nitrate levels (mg/L)</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <ResponsiveContainer width="100%" height={300}>
+                        <LineChart data={waterQualityTrends}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="month" />
+                          <YAxis />
+                          <Tooltip />
+                          <Line type="monotone" dataKey="nitrate" stroke="hsl(var(--chart-2))" strokeWidth={3} />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </CardContent>
+                  </Card>
+                </div>
+              </TabsContent>
+
+              {/* History */}
+              <TabsContent value="history" className="space-y-6">
                 <Card className="animate-slide-up">
-                  <CardHeader>
-                    <CardTitle>Nitrate Trends</CardTitle>
-                    <CardDescription>Monthly average nitrate levels (mg/L)</CardDescription>
+                  <CardHeader className="flex flex-row items-center justify-between">
+                    <div>
+                      <CardTitle>Recent Water Quality Tests</CardTitle>
+                      <CardDescription>Latest test results from all sources</CardDescription>
+                    </div>
+                    <Button asChild>
+                      <a href="/reports">
+                        <Eye className="h-4 w-4 mr-2" />
+                        View All Reports
+                      </a>
+                    </Button>
                   </CardHeader>
                   <CardContent>
-                    <ResponsiveContainer width="100%" height={300}>
-                      <LineChart data={waterQualityTrends}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="month" />
-                        <YAxis />
-                        <Tooltip />
-                        <Line type="monotone" dataKey="nitrate" stroke="hsl(var(--chart-2))" strokeWidth={3} />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </CardContent>
-                </Card>
-              </div>
-            </TabsContent>
-
-            {/* History */}
-            <TabsContent value="history" className="space-y-6">
-              <Card className="animate-slide-up">
-                <CardHeader className="flex flex-row items-center justify-between">
-                  <div>
-                    <CardTitle>Recent Water Quality Tests</CardTitle>
-                    <CardDescription>Latest test results from all sources</CardDescription>
-                  </div>
-                  <Button asChild>
-                    <Link href="/reports">
-                      <Eye className="h-4 w-4 mr-2" />
-                      View All Reports
-                    </Link>
-                  </Button>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    {recentTests.length === 0 ? (
-                      <div className="text-center py-8 text-muted-foreground">
-                        No water quality tests found. {!isAdmin && "Submit a test to see your data here."}
-                      </div>
-                    ) : (
-                      recentTests.slice(0, 10).map((test) => (
+                    <div className="space-y-4">
+                      {recentTests.map((test) => (
                         <div key={test.id} className="flex items-center justify-between p-4 border rounded-lg">
                           <div className="flex items-center gap-4">
                             <div
                               className={`w-12 h-12 rounded-lg flex items-center justify-center ${getRiskColor(
-                                test.riskAssessment?.level || 'low'
+                                test.risk
                               )}`}
                             >
                               <Droplets className="h-6 w-6" />
@@ -745,27 +734,25 @@ export default function WaterQualityPage() {
                             <div>
                               <h4 className="font-medium">{test.location}</h4>
                               <p className="text-sm text-muted-foreground">
-                                Tested by {test.testerName} on {formatDate(test.createdAt)}
+                                Tested by {test.tester} on {test.date}
                               </p>
                               <div className="flex gap-4 mt-1 text-xs text-muted-foreground">
-                                <span>Turbidity: {test.measurements?.turbidity || 'N/A'} NTU</span>
-                                <span>Nitrate: {test.measurements?.nitrate || 'N/A'} mg/L</span>
+                                <span>Turbidity: {test.turbidity} NTU</span>
+                                <span>Nitrate: {test.nitrate} mg/L</span>
                               </div>
                             </div>
                           </div>
-                          <Badge className={getRiskColor(test.riskAssessment?.level || 'low')}>
-                            {(test.riskAssessment?.level || 'N/A').toUpperCase()} RISK
-                          </Badge>
+                          <Badge className={getRiskColor(test.risk)}>{test.risk.toUpperCase()} RISK</Badge>
                         </div>
-                      ))
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
-          </Tabs>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            </Tabs>
+          </div>
         </div>
       </DashboardLayout>
-    </RBACAuthGuard>
+    </AuthGuard>
   )
 }
