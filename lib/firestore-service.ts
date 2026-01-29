@@ -32,6 +32,7 @@ export interface HealthReport {
     reporterPhone?: string;
     villageName: string;
     state: string;
+    diseaseType: string;
     symptoms: string[];
     severity: 'low' | 'medium' | 'high' | 'critical';
     numberOfCases: number;
@@ -54,6 +55,7 @@ export interface HealthReport {
 export async function addHealthReport(data: {
     villageName: string;
     state: string;
+    diseaseType: string;
     symptoms: string[];
     severity: 'low' | 'medium' | 'high' | 'critical';
     numberOfCases: number;
@@ -74,6 +76,7 @@ export async function addHealthReport(data: {
         reporterEmail: user.email || '',
         villageName: data.villageName,
         state: data.state,
+        diseaseType: data.diseaseType,
         symptoms: data.symptoms,
         severity: data.severity,
         numberOfCases: data.numberOfCases,
@@ -638,7 +641,7 @@ export async function addAwarenessContent(data: {
 
     const role = await getCurrentUserRole();
     const normalizedRole = normalizeRole(role);
-    
+
     // Allow ASHA_WORKER and ADMIN to create awareness content
     if (!hasWriteAccess(normalizedRole, 'EDUCATION')) {
         throw new Error('Insufficient permissions. Only ASHA Workers and Administrators can create awareness content.');
@@ -679,7 +682,7 @@ export async function addAwarenessContent(data: {
 export async function getAwarenessContent(limitCount = 50): Promise<AwarenessContent[]> {
     try {
         console.log('📚 Fetching awareness content from Firestore...');
-        
+
         // Simple query without composite index requirement
         const q = query(
             collection(db, 'awareness_content'),
@@ -689,7 +692,7 @@ export async function getAwarenessContent(limitCount = 50): Promise<AwarenessCon
 
         const snapshot = await getDocs(q);
         console.log(`📚 Found ${snapshot.docs.length} awareness documents`);
-        
+
         const allContent = snapshot.docs.map(doc => {
             const data = doc.data();
             console.log('📄 Document:', doc.id, data.title);
@@ -698,11 +701,11 @@ export async function getAwarenessContent(limitCount = 50): Promise<AwarenessCon
                 ...data
             };
         }) as AwarenessContent[];
-        
+
         // Filter active content client-side to avoid index requirements
         const activeContent = allContent.filter(item => item.isActive !== false);
         console.log(`📚 Active awareness content: ${activeContent.length}`);
-        
+
         return activeContent;
     } catch (error) {
         console.error('❌ Error fetching awareness content:', error);
@@ -721,7 +724,7 @@ export async function updateAwarenessContent(
 
         const role = await getCurrentUserRole();
         const normalizedRole = normalizeRole(role);
-        
+
         if (!hasWriteAccess(normalizedRole, 'EDUCATION')) {
             throw new Error('Insufficient permissions.');
         }
@@ -746,7 +749,7 @@ export async function deleteAwarenessContent(docId: string): Promise<boolean> {
 
         const role = await getCurrentUserRole();
         const normalizedRole = normalizeRole(role);
-        
+
         if (!hasWriteAccess(normalizedRole, 'EDUCATION')) {
             throw new Error('Insufficient permissions.');
         }

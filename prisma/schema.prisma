@@ -1,5 +1,5 @@
-// Village Vitals Prisma Schema
-// This schema defines the database structure for the Village Vitals healthcare monitoring system
+// JanArogya Prisma Schema
+// This schema defines the database structure for the JanArogya healthcare monitoring system
 
 generator client {
   provider = "prisma-client-js"

@@ -118,7 +118,7 @@ export function UserProfile({ compact = false }: UserProfileProps) {
     return (
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" className="relative h-10 w-10 rounded-full">
+          <Button variant="ghost" className="relative h-10 w-10 rounded-full bg-blue-900 hover:bg-blue-800 text-white">
             <Avatar className="h-8 w-8">
               <AvatarImage src={`/api/placeholder/32/32?text=${getInitials(user.firstName, user.lastName)}`} />
               <AvatarFallback className="text-xs">

@@ -190,7 +190,7 @@ export default function LoginPage() {
             }}
             className="mt-0 bg-gradient-to-br from-slate-300 to-slate-500 py-2 bg-clip-text text-center text-3xl font-medium tracking-tight text-transparent md:text-5xl"
           >
-            Welcome Back <br /> to VillageVitals
+            Welcome Back <br /> to JanArogya
           </motion.h1>
 
           <div className="w-full max-w-md bg-transparent relative z-50">
@@ -227,7 +227,7 @@ export default function LoginPage() {
                 <TabsContent value="login">
                   <CardHeader className="p-0 mb-6">
                     <CardTitle className="text-white">Welcome Back</CardTitle>
-                    <CardDescription className="text-slate-400">Sign in to your VillageVitals account</CardDescription>
+                    <CardDescription className="text-slate-400">Sign in to your JanArogya account</CardDescription>
                   </CardHeader>
                   <CardContent className="p-0">
                     <form onSubmit={handleLogin} className="space-y-4">
@@ -312,7 +312,7 @@ export default function LoginPage() {
                 <TabsContent value="register">
                   <CardHeader className="p-0 mb-6">
                     <CardTitle className="text-white">Create Account</CardTitle>
-                    <CardDescription className="text-slate-400">Join VillageVitals to start monitoring community health</CardDescription>
+                    <CardDescription className="text-slate-400">Join JanArogya to start monitoring community health</CardDescription>
                   </CardHeader>
                   <CardContent className="p-0">
                     <form onSubmit={handleRegister} className="space-y-4">

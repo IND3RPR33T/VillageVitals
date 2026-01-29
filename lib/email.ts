@@ -18,18 +18,18 @@ export async function sendOTPEmail(email: string, otpCode: string, userName: str
   try {
     const mailOptions = {
       from: {
-        name: 'VillageVitals',
-        address: process.env.EMAIL_USER || 'noreply@villagevitals.com',
+        name: 'JanArogya',
+        address: process.env.EMAIL_USER || 'noreply@janarogya.com',
       },
       to: email,
-      subject: 'Verify Your VillageVitals Account - OTP Code',
+      subject: 'Verify Your JanArogya Account - OTP Code',
       html: `
         <!DOCTYPE html>
         <html lang="en">
         <head>
           <meta charset="UTF-8">
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <title>VillageVitals - Verify Your Account</title>
+          <title>JanArogya - Verify Your Account</title>
           <style>
             body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
             .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
@@ -42,13 +42,13 @@ export async function sendOTPEmail(email: string, otpCode: string, userName: str
         </head>
         <body>
           <div class="header">
-            <h1>🏥 VillageVitals</h1>
+            <h1>🏥 JanArogya</h1>
             <p>Empowering Rural Healthcare</p>
           </div>
           
           <div class="content">
             <h2>Hello ${userName}!</h2>
-            <p>Welcome to VillageVitals! To complete your account verification, please use the OTP code below:</p>
+            <p>Welcome to JanArogya! To complete your account verification, please use the OTP code below:</p>
             
             <div class="otp-box">
               <p>Your verification code is:</p>
@@ -56,16 +56,16 @@ export async function sendOTPEmail(email: string, otpCode: string, userName: str
               <p><small>This code will expire in 10 minutes</small></p>
             </div>
             
-            <p>Enter this code in the verification screen to activate your account and start using VillageVitals to contribute to your community's health monitoring.</p>
+            <p>Enter this code in the verification screen to activate your account and start using JanArogya to contribute to your community's health monitoring.</p>
             
             <div class="warning">
-              <strong>⚠️ Security Note:</strong> Never share this code with anyone. VillageVitals staff will never ask for your verification code.
+              <strong>⚠️ Security Note:</strong> Never share this code with anyone. JanArogya staff will never ask for your verification code.
             </div>
             
             <p>If you didn't request this verification, please ignore this email or contact our support team.</p>
             
             <div class="footer">
-              <p>Best regards,<br>The VillageVitals Team</p>
+              <p>Best regards,<br>The JanArogya Team</p>
               <p><small>This is an automated email. Please do not reply to this message.</small></p>
             </div>
           </div>
@@ -73,11 +73,11 @@ export async function sendOTPEmail(email: string, otpCode: string, userName: str
         </html>
       `,
       text: `
-        VillageVitals Account Verification
+        JanArogya Account Verification
         
         Hello ${userName}!
         
-        Welcome to VillageVitals! To complete your account verification, please use the following OTP code:
+        Welcome to JanArogya! To complete your account verification, please use the following OTP code:
         
         Verification Code: ${otpCode}
         
@@ -88,7 +88,7 @@ export async function sendOTPEmail(email: string, otpCode: string, userName: str
         If you didn't request this verification, please ignore this email.
         
         Best regards,
-        The VillageVitals Team
+        The JanArogya Team
       `,
     };
 
@@ -105,18 +105,18 @@ export async function sendWelcomeEmail(email: string, userName: string) {
   try {
     const mailOptions = {
       from: {
-        name: 'VillageVitals',
-        address: process.env.EMAIL_USER || 'noreply@villagevitals.com',
+        name: 'JanArogya',
+        address: process.env.EMAIL_USER || 'noreply@janarogya.com',
       },
       to: email,
-      subject: 'Welcome to VillageVitals - Account Verified Successfully!',
+      subject: 'Welcome to JanArogya - Account Verified Successfully!',
       html: `
         <!DOCTYPE html>
         <html lang="en">
         <head>
           <meta charset="UTF-8">
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <title>Welcome to VillageVitals</title>
+          <title>Welcome to JanArogya</title>
           <style>
             body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
             .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
@@ -130,13 +130,13 @@ export async function sendWelcomeEmail(email: string, userName: string) {
         </head>
         <body>
           <div class="header">
-            <h1>🎉 Welcome to VillageVitals!</h1>
+            <h1>🎉 Welcome to JanArogya!</h1>
             <p>Your account has been verified successfully</p>
           </div>
           
           <div class="content">
             <h2>Hello ${userName}!</h2>
-            <p>Congratulations! Your VillageVitals account is now active and ready to use. You're now part of a community dedicated to improving rural healthcare.</p>
+            <p>Congratulations! Your JanArogya account is now active and ready to use. You're now part of a community dedicated to improving rural healthcare.</p>
             
             <div class="feature-list">
               <h3>What you can do now:</h3>
@@ -150,8 +150,8 @@ export async function sendWelcomeEmail(email: string, userName: string) {
             <p>Ready to get started? Log in to your dashboard and begin exploring the platform.</p>
             
             <div class="footer">
-              <p>Need help? Contact our support team at support@villagevitals.org</p>
-              <p>Best regards,<br>The VillageVitals Team</p>
+              <p>Need help? Contact our support team at support@janarogya.org</p>
+              <p>Best regards,<br>The JanArogya Team</p>
             </div>
           </div>
         </body>

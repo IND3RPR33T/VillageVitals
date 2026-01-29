@@ -1,6 +1,6 @@
-# Village Vitals Backend Setup Guide
+# JanArogya Backend Setup Guide
 
-This guide will help you set up the complete backend integration for Village Vitals with Neon database, OTP verification, and user authentication.
+This guide will help you set up the complete backend integration for JanArogya with Neon database, OTP verification, and user authentication.
 
 ## Prerequisites
 

@@ -51,9 +51,31 @@ export default function HealthReportPage() {
   // Form data state
   const [villageName, setVillageName] = useState("")
   const [selectedState, setSelectedState] = useState("")
+  const [selectedDiseaseType, setSelectedDiseaseType] = useState("")
   const [numberOfCases, setNumberOfCases] = useState("")
   const [description, setDescription] = useState("")
   const [contactInfo, setContactInfo] = useState("")
+
+  const commonSymptoms = [
+    "Fever",
+    "Headache",
+    "Cough",
+    "Sore Throat",
+    "Body Ache",
+    "Nausea",
+    "Vomiting",
+    "Diarrhea",
+    "Stomach Pain",
+    "Fatigue",
+    "Difficulty Breathing",
+    "Skin Rash",
+    "Joint Pain",
+    "Chills",
+    "Dizziness",
+    "Loss of Appetite"
+  ]
+
+  // ... existing code ...
 
   const handleSymptomToggle = (symptom: string) => {
     setSelectedSymptoms((prev) => (prev.includes(symptom) ? prev.filter((s) => s !== symptom) : [...prev, symptom]))
@@ -101,6 +123,7 @@ export default function HealthReportPage() {
       const id = await addHealthReport({
         villageName,
         state: selectedState,
+        diseaseType: selectedDiseaseType || "Unknown",
         symptoms: selectedSymptoms,
         severity: getSeverity(),
         numberOfCases: parseInt(numberOfCases) || 1,
@@ -151,8 +174,8 @@ export default function HealthReportPage() {
   return (
     <AuthGuard>
       <DashboardLayout>
-        <div className="relative w-full min-h-screen bg-slate-50 dark:bg-slate-950 rounded-lg overflow-hidden">
-          <div className="fixed inset-0 w-full h-full overflow-hidden pointer-events-none z-0">
+        <div className="relative w-full bg-slate-50 dark:bg-slate-950 rounded-lg">
+          <div className="absolute inset-0 w-full h-full pointer-events-none z-0 overflow-hidden rounded-lg">
             <div className="absolute inset-0 w-full h-full bg-slate-50 dark:bg-slate-950 z-20 [mask-image:radial-gradient(transparent,white)]" />
             <Boxes />
           </div>
@@ -238,6 +261,25 @@ export default function HealthReportPage() {
                               {state}
                             </SelectItem>
                           ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2 md:col-span-2">
+                      <Label htmlFor="diseaseType">Suspected Disease Type</Label>
+                      <Select value={selectedDiseaseType} onValueChange={setSelectedDiseaseType} required>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select suspected type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="viral">Viral (Flu, COVID-19, etc.)</SelectItem>
+                          <SelectItem value="water_borne">Water Borne (Cholera, Typhoid, etc.)</SelectItem>
+                          <SelectItem value="vector_borne">Vector Borne (Dengue, Malaria, etc.)</SelectItem>
+                          <SelectItem value="respiratory">Respiratory (Pneumonia, Bronchitis)</SelectItem>
+                          <SelectItem value="food_borne">Food Borne</SelectItem>
+                          <SelectItem value="chronic">Chronic</SelectItem>
+                          <SelectItem value="bacterial">Bacterial</SelectItem>
+                          <SelectItem value="std_sti">STD/STI</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -365,7 +407,7 @@ export default function HealthReportPage() {
                               onChange={handleImageUpload}
                             />
                           </label>
-                          <p className="mt-1 text-xs text-muted-foreground">PNG, JPG, GIF up to 10MB each</p>
+                          <p className="mt-1 text-xs text-muted-foreground">PNG, JPG, PDF up to 10MB each</p>
                         </div>
                       </div>
                     </div>

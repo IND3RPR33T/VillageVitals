@@ -326,8 +326,8 @@ export const MagicCard: React.FC<{
                             {label && <div className="magic-bento-card__label">{label}</div>}
                         </div>
                         <div className="magic-bento-card__content">
-                            {title && <h2 className="magic-bento-card__title">{title}</h2>}
-                            {description && <p className="magic-bento-card__description">{description}</p>}
+                            {title && <h2 className="magic-bento-card__title text-blue-600 dark:text-blue-400">{title}</h2>}
+                            {description && <p className="magic-bento-card__description text-blue-500 dark:text-blue-300">{description}</p>}
                         </div>
                     </>
                 )}

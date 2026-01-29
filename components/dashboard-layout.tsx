@@ -12,6 +12,8 @@ import {
   FileText,
   LogOut,
   ShieldCheck,
+  Sun,
+  Moon,
 } from "lucide-react"
 import { usePathname } from "next/navigation"
 import { Logo } from "@/components/logo"
@@ -19,6 +21,7 @@ import { UserProfile } from "@/components/user-profile"
 import { Sidebar, SidebarBody, SidebarLink } from "@/components/ui/dashboard-sidebar"
 import { useAuth } from "@/components/auth-guard"
 import { cn } from "@/lib/utils"
+import { useTheme } from "next-themes"
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: Home },
@@ -38,6 +41,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const [open, setOpen] = useState(false)
   const pathname = usePathname()
   const { user } = useAuth()
+  const { theme, setTheme } = useTheme()
 
   const links = navigation.map(item => ({
     label: item.name,
@@ -56,7 +60,12 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const settingsLinks = [
     { label: "Profile", href: "/profile", icon: <Settings className="h-5 w-5 flex-shrink-0" /> },
     { label: "Community", href: "/community", icon: <Users className="h-5 w-5 flex-shrink-0" /> },
-
+    {
+      label: theme === "dark" ? "Light Mode" : "Dark Mode",
+      href: "#",
+      icon: theme === "dark" ? <Sun className="h-5 w-5 flex-shrink-0" /> : <Moon className="h-5 w-5 flex-shrink-0" />,
+      onClick: () => setTheme(theme === "dark" ? "light" : "dark")
+    },
     { label: "Sign Out", href: "/api/auth/logout", icon: <LogOut className="h-5 w-5 flex-shrink-0" /> },
   ]
 
@@ -80,7 +89,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
             {settingsLinks.map((link, idx) => (
               <SidebarLink key={idx} link={link} />
             ))}
-            <div className="mt-2 flex items-center gap-2 px-2 py-2">
+            <div className={cn("mt-2 flex items-center py-2", open ? "gap-2 px-2" : "justify-center")}>
               <UserProfile compact={!open} />
             </div>
           </div>

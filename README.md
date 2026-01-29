@@ -1,4 +1,4 @@
-# VillageVitals
+# JanArogya
 
 Community health and water-safety platform built with Next.js 14 App Router. It provides OTP-backed authentication, role-based access, dashboards for health and water-quality reporting, and alerting tools for rural communities.
 

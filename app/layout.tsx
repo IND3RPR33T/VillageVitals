@@ -8,7 +8,7 @@ import { Suspense } from "react"
 import "./globals.css"
 
 export const metadata: Metadata = {
-  title: "VillageVitals - Rural Health Monitoring Platform",
+  title: "JanArogya - Rural Health Monitoring Platform",
   description:
     "Empowering rural communities with comprehensive health monitoring, water quality tracking, and medical resources.",
   generator: "v0.app",

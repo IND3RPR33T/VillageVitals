@@ -88,7 +88,7 @@ export default function HomePage() {
                   <GradientText className="inline-flex">Comprehensive Health Monitoring for Rural Communities</GradientText>
                 </h1>
                 <p className="text-xl text-muted-foreground text-balance mb-8 max-w-3xl mx-auto drop-shadow-sm">
-                  <ShinyText text="VillageVitals connects rural communities with essential health monitoring tools, water quality tracking, and medical resources to ensure better health outcomes for all." disabled={false} speed={3} className="inline-flex" />
+                  <ShinyText text="JanArogya connects rural communities with essential health monitoring tools, water quality tracking, and medical resources to ensure better health outcomes for all." disabled={false} speed={3} className="inline-flex" />
                 </p>
                 <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
                   <Link href="/login" className="animate-slide-up">
@@ -225,7 +225,7 @@ export default function HomePage() {
             <div className="container mx-auto text-center">
               <GradientText colors={["#5227FF", "#FF9FFC", "#B19EEF"]} animationSpeed={8} showBorder={false} className="text-3xl md:text-4xl font-bold mb-4 text-balance">Ready to Transform Rural Healthcare?</GradientText>
               <p className="text-xl mb-8 text-balance max-w-2xl mx-auto opacity-90">
-                <ShinyText text="Join thousands of health workers and community members using VillageVitals to improve health outcomes in rural areas." disabled={false} speed={3} />
+                <ShinyText text="Join thousands of health workers and community members using JanArogya to improve health outcomes in rural areas." disabled={false} speed={3} />
               </p>
               <Button size="lg" variant="secondary" asChild>
                 <Link href="/login">Get Started Today</Link>
@@ -255,7 +255,7 @@ export default function HomePage() {
                   </CardHeader>
                   <div className="px-6 pb-6">
                     <a href="mailto:support@villagevitals.org" className="text-primary hover:underline">
-                      support@villagevitals.org
+                      support@janarogya.org
                     </a>
                   </div>
                 </StarBorder>
@@ -287,7 +287,7 @@ export default function HomePage() {
             <div className="container mx-auto">
               <div className="flex flex-col md:flex-row items-center justify-between">
                 <Logo size="md" />
-                <div className="text-sm text-muted-foreground">© 2025 VillageVitals. Empowering rural healthcare.</div>
+                <div className="text-sm text-muted-foreground">© 2025 JanArogya. Empowering rural healthcare.</div>
               </div>
             </div>
           </footer>

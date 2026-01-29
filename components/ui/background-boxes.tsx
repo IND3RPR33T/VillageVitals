@@ -4,8 +4,8 @@ import { motion } from "motion/react";
 import { cn } from "@/lib/utils";
 
 export const BoxesCore = ({ className, ...rest }: { className?: string }) => {
-    const rows = new Array(100).fill(1);
-    const cols = new Array(200).fill(1);
+    const rows = new Array(30).fill(1);
+    const cols = new Array(50).fill(1);
     let colors = [
         "#7dd3fc", // sky-300
         "#f472b6", // pink-400

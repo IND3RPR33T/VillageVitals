@@ -4,31 +4,43 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --background: oklch(1 0 0); /* White */
-  --foreground: oklch(0.35 0 0); /* Dark Gray #4b5563 */
-  --card: oklch(0.98 0 0); /* Light Gray #f9fafb */
-  --card-foreground: oklch(0.35 0 0);
+  --background: oklch(100% 0.00011 271.152);
+  /* White */
+  --foreground: oklch(0.20 0.02 260);
+  /* Darker Blue-Gray for contrast */
+  --card: oklch(0.96 0.04 220);
+  /* Light Blue Tint */
+  --card-foreground: oklch(0.20 0.02 260);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.35 0 0);
-  --primary: oklch(0.55 0.15 200); /* Cyan #0891b2 */
+  --popover-foreground: oklch(0.20 0.02 260);
+  --primary: oklch(0.55 0.15 200);
+  /* Cyan #0891b2 */
   --primary-foreground: oklch(1 0 0);
-  --secondary: oklch(0.75 0.15 85); /* Amber #f59e0b */
+  --secondary: oklch(0.75 0.15 85);
+  /* Amber #f59e0b */
   --secondary-foreground: oklch(1 0 0);
-  --muted: oklch(0.98 0 0);
+  --muted: oklch(0.96 0.04 220);
   --muted-foreground: oklch(0.35 0 0);
-  --accent: oklch(0.75 0.15 85); /* Amber accent */
+  --accent: oklch(0.75 0.15 85);
+  /* Amber accent */
   --accent-foreground: oklch(0.35 0 0);
   --destructive: oklch(0.577 0.245 27.325);
   --destructive-foreground: oklch(1 0 0);
-  --border: oklch(0.92 0 0); /* Light border #e5e7eb */
+  --border: oklch(0.90 0.02 220);
+  /* Harmonized border */
   --input: oklch(1 0 0);
   --ring: oklch(0.55 0.15 200);
   /* Updated chart colors for healthcare data visualization */
-  --chart-1: oklch(0.55 0.15 200); /* Cyan */
-  --chart-2: oklch(0.75 0.15 85); /* Amber */
-  --chart-3: oklch(0.35 0 0); /* Dark Gray */
-  --chart-4: oklch(0.577 0.245 27.325); /* Red for alerts */
-  --chart-5: oklch(0.65 0.15 140); /* Green for healthy */
+  --chart-1: oklch(0.55 0.15 200);
+  /* Cyan */
+  --chart-2: oklch(0.75 0.15 85);
+  /* Amber */
+  --chart-3: oklch(0.35 0 0);
+  /* Dark Gray */
+  --chart-4: oklch(0.577 0.245 27.325);
+  /* Red for alerts */
+  --chart-5: oklch(0.65 0.15 140);
+  /* Green for healthy */
   --radius: 0.5rem;
   --sidebar: oklch(0.98 0 0);
   --sidebar-foreground: oklch(0.35 0 0);
@@ -47,9 +59,11 @@
   --card-foreground: oklch(0.985 0 0);
   --popover: oklch(0.145 0 0);
   --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.65 0.15 200); /* Lighter cyan for dark mode */
+  --primary: oklch(0.65 0.15 200);
+  /* Lighter cyan for dark mode */
   --primary-foreground: oklch(0.145 0 0);
-  --secondary: oklch(0.8 0.15 85); /* Lighter amber for dark mode */
+  --secondary: oklch(0.8 0.15 85);
+  /* Lighter amber for dark mode */
   --secondary-foreground: oklch(0.145 0 0);
   --muted: oklch(0.269 0 0);
   --muted-foreground: oklch(0.708 0 0);
@@ -120,6 +134,7 @@
   * {
     @apply border-border outline-ring/50;
   }
+
   body {
     @apply bg-background text-foreground;
   }
@@ -127,10 +142,12 @@
 
 /* Added custom animations for healthcare theme */
 @keyframes pulse-health {
+
   0%,
   100% {
     opacity: 1;
   }
+
   50% {
     opacity: 0.7;
   }
@@ -141,6 +158,7 @@
     opacity: 0;
     transform: translateY(20px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -151,6 +169,7 @@
   from {
     opacity: 0;
   }
+
   to {
     opacity: 1;
   }

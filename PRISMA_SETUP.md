@@ -1,4 +1,4 @@
-# Prisma Setup for Village Vitals
+# Prisma Setup for JanArogya
 
 ## Current Status
 
@@ -18,7 +18,7 @@ prisma/schema.prisma
 
 ### 1. Complete Database Schema
 
-The Prisma schema includes all tables for Village Vitals:
+The Prisma schema includes all tables for JanArogya:
 
 - **Users** - User accounts with roles (community, health-worker, admin)
 - **OTP Codes** - Email verification system

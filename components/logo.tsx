@@ -27,7 +27,7 @@ export function Logo({ size = "md", showText = true, className, href = "/" }: Lo
       <div className="rounded-lg overflow-hidden flex items-center justify-center bg-transparent" style={{ width: dimension, height: dimension }}>
         <Image
           src={src}
-          alt="VillageVitals logo"
+          alt="JanArogya logo"
           width={dimension}
           height={dimension}
           className="object-cover"
@@ -35,7 +35,7 @@ export function Logo({ size = "md", showText = true, className, href = "/" }: Lo
           priority
         />
       </div>
-      {showText && <span className="font-bold text-primary">VillageVitals</span>}
+      {showText && <span className="font-bold text-primary">JanArogya</span>}
     </div>
   )
 

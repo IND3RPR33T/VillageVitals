@@ -50,7 +50,7 @@ const IntroVideo = ({ onComplete }: IntroVideoProps) => {
 
             {/* Placeholder content if no video is present */}
             <div className="absolute inset-0 -z-10 flex flex-col items-center justify-center text-white bg-zinc-950">
-                <h1 className="text-4xl font-bold animate-pulse">VillageVitals</h1>
+                <h1 className="text-4xl font-bold animate-pulse">JanArogya</h1>
                 <p className="text-muted-foreground mt-4">Loading Experience...</p>
             </div>
         </motion.div>
